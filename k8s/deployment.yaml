@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chainkills
+spec:
+  selector:
+    matchLabels:
+      app: chainkills
+  template:
+    metadata:
+      labels:
+        app: chainkills
+    spec:
+      containers:
+        - name: chainkills
+          image: ghcr.io/alfreddobradi/chainkills:v0.1.0
+          command:
+            - 'chainkills'
+            - '--config'
+            - '/etc/chainkills/config.yaml'
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: config
+              mountPath: "/etc/chainkills"
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: chainkills-config
