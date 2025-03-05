@@ -1,0 +1,14 @@
+admin_name: Hi
+app_name: ItsMe
+version: v0.1.0
+wanderer:
+  token: 
+  slug: 
+  host: https://wanderer.ltd
+only_wh_kills: true
+ignore_systems:
+  - Jita
+  - Thera
+discord:
+  token: 
+  channel: 
