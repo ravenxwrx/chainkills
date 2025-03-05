@@ -44,10 +44,10 @@ func main() {
 	}
 
 	register := systems.Register(systems.WithConfig(cfg))
-	// if _, err := register.Update(); err != nil {
-	// 	slog.Error("failed to update systems", "error", err)
-	// 	os.Exit(1)
-	// }
+	if _, err := register.Update(); err != nil {
+		slog.Error("failed to update systems", "error", err)
+		os.Exit(1)
+	}
 
 	out := make(chan systems.Killmail)
 	go register.Start(out)
