@@ -14,7 +14,9 @@ import (
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
+	"github.com/bwmarrin/discordgo"
 	"github.com/gorilla/websocket"
+	"github.com/julianshen/og"
 )
 
 const (
@@ -64,6 +66,36 @@ func (k *Killmail) Color() int {
 	}
 
 	return ColorWhatever
+}
+
+func (k *Killmail) Embed() (*discordgo.MessageEmbed, error) {
+	url := k.Zkill.URL
+	slog.Debug("preparing embed", "url", url)
+
+	siteData, err := og.GetPageInfoFromUrl(url)
+	if err != nil {
+		return nil, err
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Type:        discordgo.EmbedTypeLink,
+		URL:         url,
+		Description: siteData.Description,
+		Title:       siteData.Title,
+		Color:       k.Color(),
+		Provider: &discordgo.MessageEmbedProvider{
+			URL:  "https://zkillboard.com",
+			Name: siteData.SiteName,
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL:    siteData.Images[0].Url,
+			Width:  int(siteData.Images[0].Width),
+			Height: int(siteData.Images[0].Height),
+		},
+	}
+
+	slog.Info("prepared embed", "embed", embed)
+	return embed, nil
 }
 
 type SystemRegister struct {
@@ -137,13 +169,29 @@ func (s *SystemRegister) Update() (bool, error) {
 	}
 
 	tmpRegistry := make([]System, 0)
+
+	slog.Debug("filtering systems",
+		"wormholes_only", config.Get().OnlyWHKills,
+		"ignored_systems", config.Get().IgnoreSystems,
+	)
+
 	for _, sys := range list.Data {
 
 		if config.Get().OnlyWHKills && !isWH(sys) {
+			slog.Debug("discarding system",
+				"reason", "wormhole kills only is turned on",
+				"system_name", sys.Name,
+				"system_id", sys.SolarSystemID,
+			)
 			continue
 		}
 
 		if common.Contains(config.Get().IgnoreSystems, sys.Name) {
+			slog.Debug("discarding system",
+				"reason", "system is on ignore list",
+				"system_name", sys.Name,
+				"system_id", sys.SolarSystemID,
+			)
 			continue
 		}
 
