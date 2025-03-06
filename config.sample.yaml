@@ -12,3 +12,7 @@ ignore_systems:
 discord:
   token: 
   channel: 
+friends:
+  alliances: []
+  corporations: []
+  characters: []

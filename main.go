@@ -10,6 +10,8 @@ import (
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
 	"github.com/bwmarrin/discordgo"
+	"github.com/gorilla/websocket"
+	"github.com/julianshen/og"
 )
 
 var (
@@ -43,25 +45,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	register := systems.Register(systems.WithConfig(cfg))
+	ws, _, err := websocket.DefaultDialer.Dial("wss://zkillboard.com/websocket/", nil)
+	if err != nil {
+		slog.Error("failed to establish websocket connection", "error", err)
+	}
+
+	register := systems.Register(systems.WithConfig(cfg), systems.WithWebsocket(ws))
 	if _, err := register.Update(); err != nil {
 		slog.Error("failed to update systems", "error", err)
 		os.Exit(1)
 	}
 
 	out := make(chan systems.Killmail)
-	go register.Start(out)
+	refresh := make(chan struct{})
+	register.Start(out, refresh)
 
-	tick := time.NewTicker(60 * time.Second)
+	tick := time.NewTicker(10 * time.Second)
 
-	// go func() {
-	// 	for range tick.C {
-	// 		_, err := register.Update()
-	// 		if err != nil {
-	// 			slog.Error("failed to update systems", "error", err)
-	// 		}
-	// 	}
-	// }()
+	go func() {
+		for range tick.C {
+			slog.Debug("updating system list")
+			change, err := register.Update()
+			if err != nil {
+				slog.Error("failed to update systems", "error", err)
+			}
+
+			if change {
+				slog.Debug("change in systems detected")
+				refresh <- struct{}{}
+			}
+		}
+	}()
 
 	stopOutbox := make(chan struct{})
 	go func() {
@@ -70,7 +84,12 @@ func main() {
 			case <-stopOutbox:
 				return
 			case msg := <-out:
-				if _, err := session.ChannelMessageSend(cfg.Discord.Channel, msg.Zkill.URL); err != nil {
+				embed, err := prepareEmbed(msg.Zkill.URL, msg.Color(cfg))
+				if err != nil {
+					slog.Error("failed to prepare embed", "error", err)
+					return
+				}
+				if _, err := session.ChannelMessageSendEmbed(cfg.Discord.Channel, embed); err != nil {
 					slog.Error("failed to send message", "error", err)
 					return
 				}
@@ -90,8 +109,39 @@ func main() {
 
 	<-sigChan
 	tick.Stop()
-	register.Stop()
+	if err := register.Stop(); err != nil {
+		slog.Error("failed to stop system register", "error", err)
+	}
 	session.Close()
 	close(stopOutbox)
 	slog.Info("exiting")
+}
+
+func prepareEmbed(url string, color int) (*discordgo.MessageEmbed, error) {
+	slog.Debug("preparing embed", "url", url)
+
+	siteData, err := og.GetPageInfoFromUrl(url)
+	if err != nil {
+		return nil, err
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Type:        discordgo.EmbedTypeLink,
+		URL:         url,
+		Description: siteData.Description,
+		Title:       siteData.Title,
+		Color:       color,
+		Provider: &discordgo.MessageEmbedProvider{
+			URL:  "https://zkillboard.com",
+			Name: siteData.SiteName,
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL:    siteData.Images[0].Url,
+			Width:  int(siteData.Images[0].Width),
+			Height: int(siteData.Images[0].Height),
+		},
+	}
+
+	slog.Info("prepared embed", "embed", embed)
+	return embed, nil
 }

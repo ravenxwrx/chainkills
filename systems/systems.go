@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,7 +12,15 @@ import (
 	"strings"
 	"sync"
 
+	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
+	"github.com/gorilla/websocket"
+)
+
+const (
+	ColorOurKill  int = 0x93c47d
+	ColorOurLoss  int = 0x990000
+	ColorWhatever int = 0xbcbcbc
 )
 
 var (
@@ -24,14 +33,45 @@ type System struct {
 	SolarSystemID int    `json:"solar_system_id"`
 }
 
+type Killmail struct {
+	KillmailID uint64 `json:"killmail_id"`
+	Attackers  []struct {
+		CharacterID   uint64 `json:"character_id"`
+		CorporationID uint64 `json:"corporation_id"`
+		AllianceID    uint64 `json:"alliance_id"`
+	} `json:"attackers"`
+	Victim struct {
+		CharacterID   uint64 `json:"character_id"`
+		CorporationID uint64 `json:"corporation_id"`
+		AllianceID    uint64 `json:"alliance_id"`
+	} `json:"victim"`
+	Zkill struct {
+		URL string `json:"url"`
+	} `json:"zkb"`
+}
+
+func (k *Killmail) Color(cfg *config.Cfg) int {
+	if cfg.IsFriend(k.Victim.AllianceID, k.Victim.CorporationID, k.Victim.CharacterID) {
+		return ColorOurLoss
+	}
+
+	for _, attacker := range k.Attackers {
+		if cfg.IsFriend(attacker.AllianceID, attacker.CorporationID, attacker.CharacterID) {
+			return ColorOurKill
+		}
+	}
+
+	return ColorWhatever
+}
+
 type SystemRegister struct {
 	mx     *sync.Mutex
 	stop   chan struct{}
 	errors chan error
 
-	cfg      *config.Cfg
-	systems  []System
-	listener *Listener
+	ws      *websocket.Conn
+	cfg     *config.Cfg
+	systems []System
 }
 
 type Option func(*SystemRegister)
@@ -42,15 +82,19 @@ func WithConfig(cfg *config.Cfg) Option {
 	}
 }
 
+func WithWebsocket(ws *websocket.Conn) Option {
+	return func(s *SystemRegister) {
+		s.ws = ws
+	}
+}
+
 func Register(opts ...Option) *SystemRegister {
 	if register == nil {
 		register = &SystemRegister{
 			mx:   &sync.Mutex{},
 			stop: make(chan struct{}),
 
-			systems: []System{
-				// {Name: "Ahbazon", SolarSystemID: 30005196},
-			},
+			systems: []System{},
 		}
 
 		for _, opt := range opts {
@@ -85,14 +129,10 @@ func (s *SystemRegister) Update() (bool, error) {
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("User-Agent", fmt.Sprintf("%s/%s:%s", s.cfg.AdminName, s.cfg.AppName, s.cfg.Version))
 
-	slog.Debug("sending request", "request", req)
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, err
 	}
-
-	slog.Debug("received response", "response", resp)
 
 	list := struct{ Data []System }{}
 
@@ -108,7 +148,7 @@ func (s *SystemRegister) Update() (bool, error) {
 			continue
 		}
 
-		if contains(s.cfg.IgnoreSystems, sys.Name) {
+		if common.Contains(s.cfg.IgnoreSystems, sys.Name) {
 			continue
 		}
 
@@ -128,28 +168,61 @@ func (s *SystemRegister) Update() (bool, error) {
 	return changed, nil
 }
 
-func (s *SystemRegister) Start(outbox chan Killmail) {
+func (s *SystemRegister) Start(outbox chan Killmail, refresh chan struct{}) {
 	s.mx.Lock()
 	systems := s.systems
 	s.mx.Unlock()
 
-	listener, err := NewListener(systems)
-	if err != nil {
+	filters := buildFilters(systems)
+
+	slog.Debug("subscribing to channel", "channel", filters)
+
+	if err := s.ws.WriteJSON(filters); err != nil {
 		s.errors <- err
-		close(s.errors)
-		return
 	}
 
-	s.listener = listener
+	go func() {
+		for {
+			var msg Killmail
+			if err := s.ws.ReadJSON(&msg); err != nil {
+				if !errors.Is(err, &websocket.CloseError{}) {
+					slog.Error("failed to receive message", "error", err)
+				}
+				return
+			}
 
-	done := make(chan struct{})
-	go listener.Start(outbox, done, s.errors)
-	<-done
+			if Cache().Exists(fmt.Sprintf("%d", msg.KillmailID)) {
+				continue
+			} else {
+				Cache().AddItem(fmt.Sprintf("%d", msg.KillmailID))
+			}
+
+			outbox <- msg
+		}
+	}()
+
+	go func() {
+		for range refresh {
+			filters := buildFilters(systems)
+
+			slog.Debug("subscribing to channel", "channel", filters)
+
+			if err := s.ws.WriteJSON(filters); err != nil {
+				s.errors <- err
+			}
+		}
+	}()
 }
 
-func (s *SystemRegister) Stop() {
-	close(s.listener.Stop)
+func (s *SystemRegister) Stop() error {
+	if err := s.ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+		return err
+	}
+
+	slog.Debug("websocket listener stopped")
 	close(s.stop)
+
+	return nil
 }
 
 func buildFilters(systems []System) map[string]string {
@@ -172,14 +245,4 @@ func buildFilters(systems []System) map[string]string {
 
 func isWH(sys System) bool {
 	return whPattern.MatchString(sys.Name)
-}
-
-func contains[T string | int](haystack []T, needle T) bool {
-	for _, straw := range haystack {
-		if straw == needle {
-			return true
-		}
-	}
-
-	return false
 }

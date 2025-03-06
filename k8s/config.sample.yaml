@@ -18,3 +18,7 @@ data:
     discord:
       token: 
       channel: 
+    friends:
+      alliances: []
+      corporations: []
+      characters: []
