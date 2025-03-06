@@ -10,7 +10,6 @@ import (
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
 	"github.com/bwmarrin/discordgo"
-	"github.com/gorilla/websocket"
 	"github.com/julianshen/og"
 )
 
@@ -45,35 +44,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	ws, _, err := websocket.DefaultDialer.Dial("wss://zkillboard.com/websocket/", nil)
-	if err != nil {
-		slog.Error("failed to establish websocket connection", "error", err)
+	register := systems.Register()
+	if _, err := register.Update(); err != nil {
+		slog.Error("failed to update systems", "error", err)
+		os.Exit(1)
 	}
 
-	register := systems.Register(systems.WithWebsocket(ws))
-	// if _, err := register.Update(); err != nil {
-	// 	slog.Error("failed to update systems", "error", err)
-	// 	os.Exit(1)
-	// }
-
 	out := make(chan systems.Killmail)
-	refresh := make(chan struct{})
-	register.Start(out, refresh)
+	if err := register.Fetch(out); err != nil {
+		slog.Error("failed to fetch killmails")
+	}
 
 	tick := time.NewTicker(time.Duration(config.Get().RefreshInterval) * time.Second)
 
 	go func() {
 		for range tick.C {
-			slog.Debug("updating system list")
-			// change, err := register.Update()
-			// if err != nil {
-			// 	slog.Error("failed to update systems", "error", err)
-			// }
+			change, err := register.Update()
+			if err != nil {
+				slog.Error("failed to update systems", "error", err)
+			}
 
-			// if change {
-			// 	slog.Debug("change in systems detected")
-			// 	refresh <- struct{}{}
-			// }
+			if change {
+				if err := register.Fetch(out); err != nil {
+					slog.Error("failed to fetch killmails")
+				}
+			}
 		}
 	}()
 
@@ -93,8 +88,6 @@ func main() {
 					slog.Error("failed to send message", "error", err)
 					return
 				}
-			case e := <-register.Errors():
-				slog.Error("error from register", "error", e)
 			}
 		}
 	}()
@@ -104,9 +97,6 @@ func main() {
 
 	<-sigChan
 	tick.Stop()
-	if err := register.Stop(); err != nil {
-		slog.Error("failed to stop system register", "error", err)
-	}
 	session.Close()
 	close(stopOutbox)
 	slog.Info("exiting")

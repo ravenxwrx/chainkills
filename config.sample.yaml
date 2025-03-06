@@ -1,7 +1,8 @@
 admin_name: Hi
+admin_email: hello@admin.com
 app_name: ItsMe
 version: v0.1.0
-refresh_interval: 60
+refresh_interval: 300
 wanderer:
   token: 
   slug: 

@@ -11,6 +11,7 @@ var c *Cfg
 
 type Cfg struct {
 	AdminName       string   `json:"admin_name"`
+	AdminEmail      string   `json:"admin_email"`
 	AppName         string   `json:"app_name"`
 	Version         string   `json:"version"`
 	RefreshInterval int      `json:"refresh_interval"`
@@ -59,6 +60,9 @@ func Read(path string) error {
 
 	cfg := Cfg{
 		RefreshInterval: 60, // Default value
+		Redict: Redict{
+			TTL: 60,
+		},
 	}
 
 	if err := yaml.NewDecoder(fp).Decode(&cfg); err != nil {

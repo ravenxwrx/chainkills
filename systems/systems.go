@@ -46,7 +46,9 @@ type Killmail struct {
 		AllianceID    uint64 `json:"alliance_id"`
 	} `json:"victim"`
 	Zkill struct {
-		URL string `json:"url"`
+		URL  string `json:"url"`
+		Hash string `json:"hash"`
+		NPC  bool   `json:"npc"`
 	} `json:"zkb"`
 }
 
@@ -113,7 +115,7 @@ func (s *SystemRegister) Update() (bool, error) {
 	origHash := listHash(s.systems)
 
 	url := fmt.Sprintf("%s/api/map/systems?slug=%s", config.Get().Wanderer.Host, config.Get().Wanderer.Slug)
-
+	slog.Debug("fetching systems on map", "url", url)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return false, err
@@ -158,7 +160,26 @@ func (s *SystemRegister) Update() (bool, error) {
 		s.mx.Unlock()
 	}
 
+	slog.Debug("fetch complete", "change", changed, "system_count", len(tmpRegistry))
+
 	return changed, nil
+}
+
+func (s *SystemRegister) Fetch(out chan Killmail) error {
+	s.mx.Lock()
+	systems := s.systems
+	s.mx.Unlock()
+
+	kms, err := FetchKillmails(systems)
+	if err != nil {
+		return err
+	}
+
+	for _, km := range kms {
+		out <- km
+	}
+
+	return nil
 }
 
 func (s *SystemRegister) Start(outbox chan Killmail, refresh chan struct{}) {
