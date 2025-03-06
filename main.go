@@ -95,11 +95,6 @@ func main() {
 				}
 			case e := <-register.Errors():
 				slog.Error("error from register", "error", e)
-			case <-tick.C:
-				_, err := register.Update()
-				if err != nil {
-					slog.Error("failed to update systems", "error", err)
-				}
 			}
 		}
 	}()
