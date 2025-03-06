@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
         - name: chainkills
-          image: ghcr.io/alfreddobradi/chainkills:v0.5.0
+          image: ghcr.io/alfreddobradi/chainkills:v0.5.1
           command:
             - 'chainkills'
             - '--config'
@@ -27,7 +27,31 @@ spec:
             - name: config
               mountPath: "/etc/chainkills"
               readOnly: true
+        - name: redict
+          image: registry.redict.io/redict:bookworm
+          command:
+            - "redict-server"
+            - "/etc/redict/redict.conf"
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - mountPath: "/var/data"
+              name: redict-pvc
+            - mountPath: "/etc/redict"
+              name: redict-config
+          ports:
+            - containerPort: 6379
+      securityContext:
+        fsGroup: 999
       volumes:
         - name: config
           configMap:
             name: chainkills-config
+        - name: redict-config
+          configMap:
+            name: chainkills-redict-config
+        - name: redict-pvc
+          persistentVolumeClaim:
+            claimName: chainkills-redict-claim

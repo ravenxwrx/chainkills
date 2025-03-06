@@ -23,3 +23,13 @@ data:
       alliances: []
       corporations: []
       characters: []
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chainkills-redict-config
+data:
+  redict.conf: |
+    dir /var/data
+    appendonly yes
+    loglevel verbose
