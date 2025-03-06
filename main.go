@@ -60,7 +60,7 @@ func main() {
 	refresh := make(chan struct{})
 	register.Start(out, refresh)
 
-	tick := time.NewTicker(10 * time.Second)
+	tick := time.NewTicker(time.Duration(cfg.RefreshInterval) * time.Second)
 
 	go func() {
 		for range tick.C {

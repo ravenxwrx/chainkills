@@ -8,14 +8,15 @@ import (
 )
 
 type Cfg struct {
-	AdminName     string   `json:"admin_name"`
-	AppName       string   `json:"app_name"`
-	Version       string   `json:"version"`
-	OnlyWHKills   bool     `json:"only_wh_kills"`
-	IgnoreSystems []string `json:"ignore_systems"`
-	Wanderer      Wanderer `json:"wanderer"`
-	Discord       Discord  `json:"discord"`
-	Friends       Friends  `json:"friends"`
+	AdminName       string   `json:"admin_name"`
+	AppName         string   `json:"app_name"`
+	Version         string   `json:"version"`
+	RefreshInterval int      `json:"refresh_interval"`
+	OnlyWHKills     bool     `json:"only_wh_kills"`
+	IgnoreSystems   []string `json:"ignore_systems"`
+	Wanderer        Wanderer `json:"wanderer"`
+	Discord         Discord  `json:"discord"`
+	Friends         Friends  `json:"friends"`
 }
 
 type Wanderer struct {
@@ -47,7 +48,9 @@ func Read(path string) (*Cfg, error) {
 		return nil, err
 	}
 
-	cfg := Cfg{}
+	cfg := Cfg{
+		RefreshInterval: 60, // Default value
+	}
 
 	if err := yaml.NewDecoder(fp).Decode(&cfg); err != nil {
 		return nil, err
