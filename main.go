@@ -10,7 +10,6 @@ import (
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
 	"github.com/bwmarrin/discordgo"
-	"github.com/gorilla/websocket"
 	"github.com/julianshen/og"
 )
 
@@ -28,13 +27,13 @@ func main() {
 	l := slog.New(h)
 	slog.SetDefault(l)
 
-	cfg, err := config.Read(configPath)
+	err := config.Read(configPath)
 	if err != nil {
 		slog.Error("failed to read config", "error", err)
 		os.Exit(1)
 	}
 
-	session, err := discordgo.New("Bot " + cfg.Discord.Token)
+	session, err := discordgo.New("Bot " + config.Get().Discord.Token)
 	if err != nil {
 		slog.Error("failed to create discord session", "error", err)
 		os.Exit(1)
@@ -45,34 +44,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	ws, _, err := websocket.DefaultDialer.Dial("wss://zkillboard.com/websocket/", nil)
-	if err != nil {
-		slog.Error("failed to establish websocket connection", "error", err)
-	}
-
-	register := systems.Register(systems.WithConfig(cfg), systems.WithWebsocket(ws))
+	register := systems.Register()
 	if _, err := register.Update(); err != nil {
 		slog.Error("failed to update systems", "error", err)
 		os.Exit(1)
 	}
 
 	out := make(chan systems.Killmail)
-	refresh := make(chan struct{})
-	register.Start(out, refresh)
+	if err := register.Fetch(out); err != nil {
+		slog.Error("failed to fetch killmails")
+	}
 
-	tick := time.NewTicker(time.Duration(cfg.RefreshInterval) * time.Second)
+	tick := time.NewTicker(time.Duration(config.Get().RefreshInterval) * time.Second)
 
 	go func() {
 		for range tick.C {
-			slog.Debug("updating system list")
 			change, err := register.Update()
 			if err != nil {
 				slog.Error("failed to update systems", "error", err)
 			}
 
 			if change {
-				slog.Debug("change in systems detected")
-				refresh <- struct{}{}
+				if err := register.Fetch(out); err != nil {
+					slog.Error("failed to fetch killmails")
+				}
 			}
 		}
 	}()
@@ -84,17 +79,15 @@ func main() {
 			case <-stopOutbox:
 				return
 			case msg := <-out:
-				embed, err := prepareEmbed(msg.Zkill.URL, msg.Color(cfg))
+				embed, err := prepareEmbed(msg.Zkill.URL, msg.Color())
 				if err != nil {
 					slog.Error("failed to prepare embed", "error", err)
 					return
 				}
-				if _, err := session.ChannelMessageSendEmbed(cfg.Discord.Channel, embed); err != nil {
+				if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
 					slog.Error("failed to send message", "error", err)
 					return
 				}
-			case e := <-register.Errors():
-				slog.Error("error from register", "error", e)
 			}
 		}
 	}()
@@ -104,9 +97,6 @@ func main() {
 
 	<-sigChan
 	tick.Stop()
-	if err := register.Stop(); err != nil {
-		slog.Error("failed to stop system register", "error", err)
-	}
 	session.Close()
 	close(stopOutbox)
 	slog.Info("exiting")

@@ -5,9 +5,10 @@ metadata:
 data:
   config.yaml: |
     admin_name: Hi
+    admin_email: hello@admin.com
     app_name: ItsMe
     version: v0.1.0
-    refresh_interval: 60
+    refresh_interval: 300
     wanderer:
       token: 
       slug: 
@@ -23,3 +24,17 @@ data:
       alliances: []
       corporations: []
       characters: []
+    redis:
+      address: chainkills-redict-svc:6379
+      database: 0
+      ttl: 1440
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chainkills-redict-config
+data:
+  redict.conf: |
+    dir /var/data
+    appendonly yes
+    loglevel verbose

@@ -9,19 +9,30 @@ import (
 )
 
 func TestAll(t *testing.T) {
-	cache := newCache()
+	cache, err := newMemoryCache()
+	require.NoError(t, err)
 
 	idExists := uuid.NewString()
 	idNotExists := uuid.NewString()
 
 	cache.AddItem(idExists)
 
-	require.True(t, cache.Exists(idExists))
-	require.False(t, cache.Exists(idNotExists))
+	{
+		exists, err := cache.Exists(idExists)
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
+
+	{
+		exists, err := cache.Exists(idNotExists)
+		require.NoError(t, err)
+		require.False(t, exists)
+	}
 }
 
 func TestEvict(t *testing.T) {
-	cache := newCache()
+	cache, err := newMemoryCache()
+	require.NoError(t, err)
 
 	id := uuid.NewString()
 
@@ -29,5 +40,7 @@ func TestEvict(t *testing.T) {
 	cache.items[id] = time.Now().Add(-10 * time.Hour)
 	cache.evict()
 
-	require.False(t, cache.Exists(id))
+	exists, err := cache.Exists(id)
+	require.NoError(t, err)
+	require.False(t, exists)
 }
