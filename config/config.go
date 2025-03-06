@@ -10,29 +10,29 @@ import (
 var c *Cfg
 
 type Cfg struct {
-	AdminName       string   `json:"admin_name"`
-	AdminEmail      string   `json:"admin_email"`
-	AppName         string   `json:"app_name"`
-	Version         string   `json:"version"`
-	RefreshInterval int      `json:"refresh_interval"`
-	OnlyWHKills     bool     `json:"only_wh_kills"`
-	IgnoreSystems   []string `json:"ignore_systems"`
-	Redict          Redict   `json:"redict"`
-	Wanderer        Wanderer `json:"wanderer"`
-	Discord         Discord  `json:"discord"`
-	Friends         Friends  `json:"friends"`
+	AdminName       string   `yaml:"admin_name"`
+	AdminEmail      string   `yaml:"admin_email"`
+	AppName         string   `yaml:"app_name"`
+	Version         string   `yaml:"version"`
+	RefreshInterval int      `yaml:"refresh_interval"`
+	OnlyWHKills     bool     `yaml:"only_wh_kills"`
+	IgnoreSystems   []string `yaml:"ignore_systems"`
+	Redict          Redict   `yaml:"redict"`
+	Wanderer        Wanderer `yaml:"wanderer"`
+	Discord         Discord  `yaml:"discord"`
+	Friends         Friends  `yaml:"friends"`
 }
 
 type Redict struct {
-	Address  string `json:"address"`
-	Database int    `json:"database"`
-	TTL      int    `json:"ttl"` // Time to live for keys in minutes
+	Address  string `yaml:"address"`
+	Database int    `yaml:"database"`
+	TTL      int    `yaml:"ttl"` // Time to live for keys in minutes
 }
 
 type Wanderer struct {
-	Token string `json:"token"`
-	Slug  string `json:"slug"`
-	Host  string `json:"host"`
+	Token string `yaml:"token"`
+	Slug  string `yaml:"slug"`
+	Host  string `yaml:"host"`
 }
 
 type Discord struct {

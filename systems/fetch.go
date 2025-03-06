@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"sync"
 
@@ -11,6 +12,7 @@ import (
 )
 
 func FetchKillmails(systems []System) (map[string]Killmail, error) {
+	mx := &sync.Mutex{}
 	killmails := make(map[string]Killmail)
 
 	var outerError error
@@ -27,6 +29,10 @@ func FetchKillmails(systems []System) (map[string]Killmail, error) {
 				outerError = err
 			}
 
+			mx.Lock()
+			maps.Copy(killmails, kms)
+			mx.Unlock()
+
 			for k, v := range kms {
 				killmails[k] = v
 			}
@@ -34,11 +40,12 @@ func FetchKillmails(systems []System) (map[string]Killmail, error) {
 	}
 
 	wg.Wait()
+	slog.Debug("finished fetching killmails in the chain", "count", len(killmails))
 	return killmails, outerError
 }
 
 func FetchSystemKillmails(systemID string) (map[string]Killmail, error) {
-	url := fmt.Sprintf("https://zkillboard.com/api/w-space/systemID/%s/pastSeconds/10800/", systemID)
+	url := fmt.Sprintf("https://zkillboard.com/api/systemID/%s/pastSeconds/10800/", systemID)
 	slog.Debug("fetching killmails", "system", systemID, "url", url)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -72,7 +79,12 @@ func FetchSystemKillmails(systemID string) (map[string]Killmail, error) {
 		km := killmails[i]
 		id := fmt.Sprintf("%d", km.KillmailID)
 
-		if exists, _ := cache.Exists(id); exists {
+		exists, err := cache.Exists(id)
+		if err != nil {
+			slog.Error("failed to check id in cache", "error", err)
+			continue
+		} else if exists {
+			slog.Debug("key already exists in cache", "id", id)
 			continue
 		}
 
@@ -94,7 +106,13 @@ func FetchSystemKillmails(systemID string) (map[string]Killmail, error) {
 		km.Victim = esiKM.Victim
 
 		kms[id] = km
+
+		if err := cache.AddItem(id); err != nil {
+			slog.Error("failed to add item to cache", "id", id, "error", err)
+		}
 	}
+
+	slog.Debug("finished fetching killmails in system", "id", systemID, "count", len(kms))
 
 	return kms, nil
 }
