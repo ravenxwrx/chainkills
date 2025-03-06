@@ -17,3 +17,6 @@ friends:
   alliances: []
   corporations: []
   characters: []
+redis:
+  address: localhost:6379
+  database: 0

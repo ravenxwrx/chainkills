@@ -50,13 +50,13 @@ type Killmail struct {
 	} `json:"zkb"`
 }
 
-func (k *Killmail) Color(cfg *config.Cfg) int {
-	if cfg.IsFriend(k.Victim.AllianceID, k.Victim.CorporationID, k.Victim.CharacterID) {
+func (k *Killmail) Color() int {
+	if config.Get().IsFriend(k.Victim.AllianceID, k.Victim.CorporationID, k.Victim.CharacterID) {
 		return ColorOurLoss
 	}
 
 	for _, attacker := range k.Attackers {
-		if cfg.IsFriend(attacker.AllianceID, attacker.CorporationID, attacker.CharacterID) {
+		if config.Get().IsFriend(attacker.AllianceID, attacker.CorporationID, attacker.CharacterID) {
 			return ColorOurKill
 		}
 	}
@@ -70,17 +70,10 @@ type SystemRegister struct {
 	errors chan error
 
 	ws      *websocket.Conn
-	cfg     *config.Cfg
 	systems []System
 }
 
 type Option func(*SystemRegister)
-
-func WithConfig(cfg *config.Cfg) Option {
-	return func(s *SystemRegister) {
-		s.cfg = cfg
-	}
-}
 
 func WithWebsocket(ws *websocket.Conn) Option {
 	return func(s *SystemRegister) {
@@ -119,15 +112,15 @@ func (s *SystemRegister) Update() (bool, error) {
 
 	origHash := listHash(s.systems)
 
-	url := fmt.Sprintf("%s/api/map/systems?slug=%s", s.cfg.Wanderer.Host, s.cfg.Wanderer.Slug)
+	url := fmt.Sprintf("%s/api/map/systems?slug=%s", config.Get().Wanderer.Host, config.Get().Wanderer.Slug)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return false, err
 	}
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.cfg.Wanderer.Token))
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", config.Get().Wanderer.Token))
 	req.Header.Add("Accept", "application/json")
-	req.Header.Add("User-Agent", fmt.Sprintf("%s/%s:%s", s.cfg.AdminName, s.cfg.AppName, s.cfg.Version))
+	req.Header.Add("User-Agent", fmt.Sprintf("%s/%s:%s", config.Get().AdminName, config.Get().AppName, config.Get().Version))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -144,11 +137,11 @@ func (s *SystemRegister) Update() (bool, error) {
 	tmpRegistry := make([]System, 0)
 	for _, sys := range list.Data {
 
-		if s.cfg.OnlyWHKills && !isWH(sys) {
+		if config.Get().OnlyWHKills && !isWH(sys) {
 			continue
 		}
 
-		if common.Contains(s.cfg.IgnoreSystems, sys.Name) {
+		if common.Contains(config.Get().IgnoreSystems, sys.Name) {
 			continue
 		}
 
@@ -191,10 +184,18 @@ func (s *SystemRegister) Start(outbox chan Killmail, refresh chan struct{}) {
 				return
 			}
 
-			if Cache().Exists(fmt.Sprintf("%d", msg.KillmailID)) {
+			cache, err := Cache()
+			if err != nil {
+				slog.Error("failed to get Cache instance", "error", err)
+				return
+			}
+
+			if exists, _ := cache.Exists(fmt.Sprintf("%d", msg.KillmailID)); exists {
 				continue
 			} else {
-				Cache().AddItem(fmt.Sprintf("%d", msg.KillmailID))
+				if err := cache.AddItem(fmt.Sprintf("%d", msg.KillmailID)); err != nil {
+					slog.Error("failed to add item to cache", "id", msg.KillmailID, "error", err)
+				}
 			}
 
 			outbox <- msg
