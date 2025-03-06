@@ -25,6 +25,7 @@ type Cfg struct {
 type Redict struct {
 	Address  string `json:"address"`
 	Database int    `json:"database"`
+	TTL      int    `json:"ttl"` // Time to live for keys in minutes
 }
 
 type Wanderer struct {

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -101,7 +102,7 @@ func newRedictCache(url string) (*RedictCache, error) {
 }
 
 func (r *RedictCache) AddItem(id string) error {
-	if err := r.redict.Set(context.Background(), id, "", 24*time.Hour).Err(); err != nil {
+	if err := r.redict.Set(context.Background(), id, "", time.Duration(config.Get().Redict.TTL)*time.Minute).Err(); err != nil {
 		return err
 	}
 
