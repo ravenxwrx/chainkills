@@ -1,7 +1,9 @@
 package config
 
 import (
+	"log/slog"
 	"os"
+	"path/filepath"
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"gopkg.in/yaml.v3"
@@ -53,6 +55,12 @@ func (c *Cfg) IsFriend(allianceID, corpID, CharacterID uint64) bool {
 }
 
 func Read(path string) error {
+	if p, err := filepath.Abs(path); err != nil {
+		slog.Warn("find to get absolute filepath", "error", err)
+	} else {
+		slog.Debug("opening config", "path", p)
+	}
+
 	fp, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
 		return err

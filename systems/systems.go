@@ -2,6 +2,7 @@ package systems
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -14,15 +15,19 @@ import (
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
-	"github.com/bwmarrin/discordgo"
 	"github.com/gorilla/websocket"
-	"github.com/julianshen/og"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
 	ColorOurKill  int = 0x93c47d
 	ColorOurLoss  int = 0x990000
 	ColorWhatever int = 0xbcbcbc
+
+	packageName string = "git.sr.ht/~barveyhirdman/chainkills/systems"
 )
 
 var (
@@ -35,67 +40,8 @@ type System struct {
 	SolarSystemID int    `json:"solar_system_id"`
 }
 
-type Killmail struct {
-	KillmailID uint64 `json:"killmail_id"`
-	Attackers  []struct {
-		CharacterID   uint64 `json:"character_id"`
-		CorporationID uint64 `json:"corporation_id"`
-		AllianceID    uint64 `json:"alliance_id"`
-	} `json:"attackers"`
-	Victim struct {
-		CharacterID   uint64 `json:"character_id"`
-		CorporationID uint64 `json:"corporation_id"`
-		AllianceID    uint64 `json:"alliance_id"`
-	} `json:"victim"`
-	Zkill struct {
-		URL  string `json:"url"`
-		Hash string `json:"hash"`
-		NPC  bool   `json:"npc"`
-	} `json:"zkb"`
-}
-
-func (k *Killmail) Color() int {
-	if config.Get().IsFriend(k.Victim.AllianceID, k.Victim.CorporationID, k.Victim.CharacterID) {
-		return ColorOurLoss
-	}
-
-	for _, attacker := range k.Attackers {
-		if config.Get().IsFriend(attacker.AllianceID, attacker.CorporationID, attacker.CharacterID) {
-			return ColorOurKill
-		}
-	}
-
-	return ColorWhatever
-}
-
-func (k *Killmail) Embed() (*discordgo.MessageEmbed, error) {
-	url := k.Zkill.URL
-	slog.Debug("preparing embed", "url", url)
-
-	siteData, err := og.GetPageInfoFromUrl(url)
-	if err != nil {
-		return nil, err
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Type:        discordgo.EmbedTypeLink,
-		URL:         url,
-		Description: siteData.Description,
-		Title:       siteData.Title,
-		Color:       k.Color(),
-		Provider: &discordgo.MessageEmbedProvider{
-			URL:  "https://zkillboard.com",
-			Name: siteData.SiteName,
-		},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL:    siteData.Images[0].Url,
-			Width:  int(siteData.Images[0].Width),
-			Height: int(siteData.Images[0].Height),
-		},
-	}
-
-	slog.Info("prepared embed", "embed", embed)
-	return embed, nil
+func (s System) String() string {
+	return fmt.Sprintf("%d - %s", s.SolarSystemID, s.Name)
 }
 
 type SystemRegister struct {
@@ -141,15 +87,23 @@ func (s *SystemRegister) Errors() <-chan error {
 	return s.errors
 }
 
-func (s *SystemRegister) Update() (bool, error) {
+func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
+	_, span := otel.Tracer(packageName).Start(ctx, "Update")
+	defer span.End()
+
 	client := http.Client{}
 
 	origHash := listHash(s.systems)
 
 	url := fmt.Sprintf("%s/api/map/systems?slug=%s", config.Get().Wanderer.Host, config.Get().Wanderer.Slug)
 	slog.Debug("fetching systems on map", "url", url)
+	span.AddEvent("fetch systems", trace.WithAttributes(
+		attribute.String("url", url),
+	))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return false, err
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", config.Get().Wanderer.Token))
@@ -158,6 +112,8 @@ func (s *SystemRegister) Update() (bool, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return false, err
 	}
 
@@ -165,6 +121,8 @@ func (s *SystemRegister) Update() (bool, error) {
 
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&list); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return false, err
 	}
 
@@ -209,17 +167,33 @@ func (s *SystemRegister) Update() (bool, error) {
 	}
 
 	slog.Debug("fetch complete", "change", changed, "system_count", len(tmpRegistry))
-
+	span.AddEvent("fetch complete", trace.WithAttributes(
+		attribute.Bool("change", changed),
+		attribute.Int("system_count", len(tmpRegistry)),
+	))
 	return changed, nil
 }
 
-func (s *SystemRegister) Fetch(out chan Killmail) error {
+func (s *SystemRegister) Fetch(ctx context.Context, out chan Killmail) error {
+	sctx, span := otel.Tracer(packageName).Start(ctx, "Fetch")
+	defer span.End()
+
 	s.mx.Lock()
 	systems := s.systems
 	s.mx.Unlock()
 
-	kms, err := FetchKillmails(systems)
+	systemList := make([]string, len(systems))
+	for i := range systems {
+		systemList[i] = systems[i].String()
+	}
+
+	span.SetAttributes(
+		attribute.StringSlice("systems", systemList),
+	)
+	kms, err := FetchKillmails(sctx, systems)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
