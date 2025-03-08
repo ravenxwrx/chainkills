@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"sync"
 	"time"
 
 	"git.sr.ht/~barveyhirdman/chainkills/config"
@@ -71,7 +70,6 @@ func main() {
 	slog.Debug("starting ticker", "interval", tickerDuration.String())
 	tick := time.NewTicker(tickerDuration)
 
-	wg := &sync.WaitGroup{}
 	go func() {
 		for {
 			select {
@@ -88,19 +86,17 @@ func main() {
 				if msg.KillmailID == 0 {
 					continue
 				}
-				wg.Add(1)
-				func() {
-					defer wg.Done()
-					embed, err := msg.Embed()
-					if err != nil {
-						slog.Error("failed to prepare embed", "error", err)
-						return
-					}
-					if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
-						slog.Error("failed to send message", "error", err)
-						return
-					}
-				}()
+
+				embed, err := msg.Embed()
+				if err != nil {
+					slog.Error("failed to prepare embed", "error", err)
+					return
+				}
+				if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
+					slog.Error("failed to send message", "error", err)
+					return
+				}
+
 			}
 		}
 	}()
@@ -116,6 +112,5 @@ func main() {
 	tick.Stop()
 	session.Close()
 	close(out)
-	wg.Wait()
 	slog.Info("exiting")
 }
