@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"git.sr.ht/~barveyhirdman/chainkills/config"
+	"git.sr.ht/~barveyhirdman/chainkills/instrumentation"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
 	"github.com/bwmarrin/discordgo"
 )
@@ -20,6 +22,8 @@ var (
 func main() {
 	flag.StringVar(&configPath, "config", "config.yaml", "Path to config")
 	flag.Parse()
+
+	rootCtx := context.Background()
 
 	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
@@ -33,6 +37,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	tracerShutdown, err := instrumentation.InitTracer(rootCtx)
+	if err != nil {
+		slog.Error("failed to initialize tracer", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := tracerShutdown(rootCtx); err != nil {
+			slog.Error("failed to shut down tracer cleanly", "error", err)
+		}
+	}()
+
 	session, err := discordgo.New("Bot " + config.Get().Discord.Token)
 	if err != nil {
 		slog.Error("failed to create discord session", "error", err)
@@ -45,7 +60,7 @@ func main() {
 	}
 
 	register := systems.Register()
-	if _, err := register.Update(); err != nil {
+	if _, err := register.Update(rootCtx); err != nil {
 		slog.Error("failed to update systems", "error", err)
 		os.Exit(1)
 	}
@@ -61,17 +76,18 @@ func main() {
 		for {
 			select {
 			case <-tick.C:
-				change, err := register.Update()
+				_, err := register.Update(rootCtx)
 				if err != nil {
 					slog.Error("failed to update systems", "error", err)
 				}
 
-				if change {
-					if err := register.Fetch(out); err != nil {
-						slog.Error("failed to fetch killmails")
-					}
+				if err := register.Fetch(rootCtx, out); err != nil {
+					slog.Error("failed to fetch killmails")
 				}
 			case msg := <-out:
+				if msg.KillmailID == 0 {
+					continue
+				}
 				wg.Add(1)
 				func() {
 					defer wg.Done()
@@ -89,7 +105,7 @@ func main() {
 		}
 	}()
 
-	if err := register.Fetch(out); err != nil {
+	if err := register.Fetch(rootCtx, out); err != nil {
 		slog.Error("failed to fetch killmails")
 	}
 

@@ -38,3 +38,11 @@ data:
     dir /var/data
     appendonly yes
     loglevel verbose
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chainkills-app-env
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4317
+  OTEL_EXPORTER_OTLP_INSECURE: "true"
