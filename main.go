@@ -53,6 +53,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	session.LogLevel = discordgo.LogDebug
+	session.ShouldReconnectOnError = true
+	session.ShouldRetryOnRateLimit = true
+
 	if err := session.Open(); err != nil {
 		slog.Error("failed to open discord session", "error", err)
 		os.Exit(1)
