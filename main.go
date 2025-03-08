@@ -76,15 +76,13 @@ func main() {
 		for {
 			select {
 			case <-tick.C:
-				change, err := register.Update(rootCtx)
+				_, err := register.Update(rootCtx)
 				if err != nil {
 					slog.Error("failed to update systems", "error", err)
 				}
 
-				if change {
-					if err := register.Fetch(rootCtx, out); err != nil {
-						slog.Error("failed to fetch killmails")
-					}
+				if err := register.Fetch(rootCtx, out); err != nil {
+					slog.Error("failed to fetch killmails")
 				}
 			case msg := <-out:
 				if msg.KillmailID == 0 {
