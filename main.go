@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"time"
 
+	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"git.sr.ht/~barveyhirdman/chainkills/instrumentation"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
@@ -36,13 +37,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	tracerShutdown, err := instrumentation.InitTracer(rootCtx)
+	shutdownFns, err := instrumentation.Init(rootCtx)
 	if err != nil {
 		slog.Error("failed to initialize tracer", "error", err)
 		os.Exit(1)
 	}
 	defer func() {
-		if err := tracerShutdown(rootCtx); err != nil {
+		if err := shutdownFns.Shutdown(rootCtx); err != nil {
 			slog.Error("failed to shut down tracer cleanly", "error", err)
 		}
 	}()
@@ -73,46 +74,38 @@ func main() {
 	tickerDuration := time.Duration(config.Get().RefreshInterval) * time.Second
 	slog.Debug("starting ticker", "interval", tickerDuration.String())
 	tick := time.NewTicker(tickerDuration)
-	wsTick := time.NewTicker(15 * time.Minute)
+	// wsTick := time.NewTicker(15 * time.Minute)
 
 	go func() {
-		for {
-			select {
-			case <-tick.C:
-				_, err := register.Update(rootCtx)
-				if err != nil {
-					slog.Error("failed to update systems", "error", err)
-				}
-
-				if err := register.Fetch(rootCtx, out); err != nil {
-					slog.Error("failed to fetch killmails")
-				}
-			case <-wsTick.C:
-				slog.Info("restarting Discord websocket session")
-				if err := session.Close(); err != nil {
-					slog.Error("failed to close Discord session", "error", err)
-					return
-				}
-				if err := session.Open(); err != nil {
-					slog.Error("failed to reopen Discord session", "error", err)
-					return
-				}
-			case msg := <-out:
-				if msg.KillmailID == 0 {
-					continue
-				}
-
-				embed, err := msg.Embed()
-				if err != nil {
-					slog.Error("failed to prepare embed", "error", err)
-					return
-				}
-				if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
-					slog.Error("failed to send message", "error", err)
-					return
-				}
-
+		for range tick.C {
+			_, err := register.Update(rootCtx)
+			if err != nil {
+				slog.Error("failed to update systems", "error", err)
 			}
+
+			if err := register.Fetch(rootCtx, out); err != nil {
+				slog.Error("failed to fetch killmails")
+			}
+		}
+	}()
+
+	go func() {
+		for msg := range out {
+			if msg.KillmailID == 0 {
+				continue
+			}
+
+			embed, err := msg.Embed()
+			if err != nil {
+				slog.Error("failed to prepare embed", "error", err)
+				return
+			}
+			if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
+				slog.Error("failed to send message", "error", err)
+				return
+			}
+
+			common.GetBackpressureMonitor().Decrease("killmail")
 		}
 	}()
 

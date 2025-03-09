@@ -198,6 +198,7 @@ func (s *SystemRegister) Fetch(ctx context.Context, out chan Killmail) error {
 	}
 
 	for _, km := range kms {
+		common.GetBackpressureMonitor().Increase("killmail")
 		out <- km
 	}
 
