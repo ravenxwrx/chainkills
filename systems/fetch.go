@@ -26,27 +26,19 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 
 	var outerError error
 
-	wg := &sync.WaitGroup{}
 	for _, system := range systems {
-		wg.Add(1)
+		kms, err := FetchSystemKillmails(sctx, fmt.Sprintf("%d", system.SolarSystemID))
+		if err != nil {
+			slog.Error("failed to fetch system killmails", "system", system.SolarSystemID, "error", err)
+			outerError = errors.Join(outerError, err)
+			continue
+		}
 
-		go func() {
-			defer span.End()
-			defer wg.Done()
-			kms, err := FetchSystemKillmails(sctx, fmt.Sprintf("%d", system.SolarSystemID))
-			if err != nil {
-				slog.Error("failed to fetch system killmails", "system", system.SolarSystemID, "error", err)
-				outerError = errors.Join(outerError, err)
-				return
-			}
-
-			mx.Lock()
-			maps.Copy(killmails, kms)
-			mx.Unlock()
-		}()
+		mx.Lock()
+		maps.Copy(killmails, kms)
+		mx.Unlock()
 	}
 
-	wg.Wait()
 	slog.Debug("finished fetching killmails in the chain", "count", len(killmails))
 	span.AddEvent("finished fetching killmails in the chain",
 		trace.WithAttributes(
