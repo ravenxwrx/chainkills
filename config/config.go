@@ -12,6 +12,7 @@ import (
 var c *Cfg
 
 type Cfg struct {
+	Verbose         bool     `yaml:"verbose"`
 	AdminName       string   `yaml:"admin_name"`
 	AdminEmail      string   `yaml:"admin_email"`
 	AppName         string   `yaml:"app_name"`

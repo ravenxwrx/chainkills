@@ -25,8 +25,12 @@ func main() {
 
 	rootCtx := context.Background()
 
+	level := slog.LevelInfo
+	if config.Get().Verbose {
+		level = slog.LevelDebug
+	}
 	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: level,
 	})
 	l := slog.New(h)
 	slog.SetDefault(l)
