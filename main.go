@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"time"
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
@@ -54,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	session.LogLevel = discordgo.LogDebug
+	session.LogLevel = discordgo.LogInformational
 	session.ShouldReconnectOnError = true
 	session.ShouldRetryOnRateLimit = true
 
@@ -62,6 +64,8 @@ func main() {
 		slog.Error("failed to open discord session", "error", err)
 		os.Exit(1)
 	}
+
+	printMemStats()
 
 	register := systems.Register()
 	if _, err := register.Update(rootCtx); err != nil {
@@ -74,7 +78,7 @@ func main() {
 	tickerDuration := time.Duration(config.Get().RefreshInterval) * time.Second
 	slog.Debug("starting ticker", "interval", tickerDuration.String())
 	tick := time.NewTicker(tickerDuration)
-	// wsTick := time.NewTicker(15 * time.Minute)
+	memTick := time.NewTicker(1 * time.Minute)
 
 	go func() {
 		for range tick.C {
@@ -86,6 +90,14 @@ func main() {
 			if err := register.Fetch(rootCtx, out); err != nil {
 				slog.Error("failed to fetch killmails")
 			}
+
+			printMemStats()
+		}
+	}()
+
+	go func() {
+		for range memTick.C {
+			printMemStats()
 		}
 	}()
 
@@ -106,6 +118,8 @@ func main() {
 			}
 
 			common.GetBackpressureMonitor().Decrease("killmail")
+
+			printMemStats()
 		}
 	}()
 
@@ -118,7 +132,20 @@ func main() {
 
 	<-sigChan
 	tick.Stop()
+	memTick.Stop()
 	session.Close()
 	close(out)
 	slog.Info("exiting")
+}
+
+func printMemStats() {
+	stats := runtime.MemStats{}
+	runtime.ReadMemStats(&stats)
+
+	slog.Debug("memory stats",
+		"sys", fmt.Sprintf("%f.3", float64(stats.Sys)/1024/1024),
+		"heap", fmt.Sprintf("%f.3", float64(stats.HeapSys)/1024/1024),
+		"stack", fmt.Sprintf("%f.3", float64(stats.StackSys)/1024/1024),
+		"goroutines", runtime.NumGoroutine(),
+	)
 }
