@@ -15,12 +15,14 @@ func TestBackpressure(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		b.Increase("test")
+		b.Log(slog.LevelDebug)
 	}
 
 	require.Equal(t, 10, b.services["test"].count)
 
 	for i := 0; i < 15; i++ {
 		b.Decrease("test")
+		b.Log(slog.LevelDebug)
 	}
 
 	require.Equal(t, 0, b.services["test"].count)
