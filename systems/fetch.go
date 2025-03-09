@@ -86,8 +86,10 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 	if err := decoder.Decode(&killmails); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		resp.Body.Close()
 		return nil, err
 	}
+	resp.Body.Close()
 
 	cache, err := Cache()
 	if err != nil {
@@ -176,8 +178,10 @@ func GetEsiKillmail(ctx context.Context, id uint64, hash string) (Killmail, erro
 	if err := decoder.Decode(&km); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		resp.Body.Close()
 		return Killmail{}, err
 	}
+	resp.Body.Close()
 
 	return km, nil
 }

@@ -123,8 +123,10 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 	if err := decoder.Decode(&list); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		resp.Body.Close()
 		return false, err
 	}
+	resp.Body.Close()
 
 	tmpRegistry := make([]System, 0)
 
