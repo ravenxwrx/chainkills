@@ -25,6 +25,12 @@ func main() {
 
 	rootCtx := context.Background()
 
+	err := config.Read(configPath)
+	if err != nil {
+		slog.Error("failed to read config", "error", err)
+		os.Exit(1)
+	}
+
 	level := slog.LevelInfo
 	if config.Get().Verbose {
 		level = slog.LevelDebug
@@ -34,12 +40,6 @@ func main() {
 	})
 	l := slog.New(h)
 	slog.SetDefault(l)
-
-	err := config.Read(configPath)
-	if err != nil {
-		slog.Error("failed to read config", "error", err)
-		os.Exit(1)
-	}
 
 	shutdownFns, err := instrumentation.Init(rootCtx)
 	if err != nil {
