@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sync"
 
+	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -25,19 +26,30 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 	killmails := make(map[string]Killmail)
 
 	var outerError error
+	wg := &sync.WaitGroup{}
 
 	for _, system := range systems {
-		kms, err := FetchSystemKillmails(sctx, fmt.Sprintf("%d", system.SolarSystemID))
-		if err != nil {
-			slog.Error("failed to fetch system killmails", "system", system.SolarSystemID, "error", err)
-			outerError = errors.Join(outerError, err)
-			continue
-		}
+		wg.Add(1)
+		common.GetBackpressureMonitor().Increase("fetch_system_killmails")
+		go func(s System) {
+			defer func() {
+				common.GetBackpressureMonitor().Decrease("fetch_system_killmails")
+				wg.Done()
+			}()
 
-		mx.Lock()
-		maps.Copy(killmails, kms)
-		mx.Unlock()
+			kms, err := FetchSystemKillmails(sctx, fmt.Sprintf("%d", system.SolarSystemID))
+			if err != nil {
+				slog.Error("failed to fetch system killmails", "system", system.SolarSystemID, "error", err)
+				outerError = errors.Join(outerError, err)
+				return
+			}
+
+			mx.Lock()
+			maps.Copy(killmails, kms)
+			mx.Unlock()
+		}(system)
 	}
+	wg.Wait()
 
 	slog.Debug("finished fetching killmails in the chain", "count", len(killmails))
 	span.AddEvent("finished fetching killmails in the chain",
