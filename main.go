@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"sync"
 	"time"
 
+	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"git.sr.ht/~barveyhirdman/chainkills/instrumentation"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
@@ -25,25 +25,29 @@ func main() {
 
 	rootCtx := context.Background()
 
-	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})
-	l := slog.New(h)
-	slog.SetDefault(l)
-
 	err := config.Read(configPath)
 	if err != nil {
 		slog.Error("failed to read config", "error", err)
 		os.Exit(1)
 	}
 
-	tracerShutdown, err := instrumentation.InitTracer(rootCtx)
+	level := slog.LevelInfo
+	if config.Get().Verbose {
+		level = slog.LevelDebug
+	}
+	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	})
+	l := slog.New(h)
+	slog.SetDefault(l)
+
+	shutdownFns, err := instrumentation.Init(rootCtx)
 	if err != nil {
 		slog.Error("failed to initialize tracer", "error", err)
 		os.Exit(1)
 	}
 	defer func() {
-		if err := tracerShutdown(rootCtx); err != nil {
+		if err := shutdownFns.Shutdown(rootCtx); err != nil {
 			slog.Error("failed to shut down tracer cleanly", "error", err)
 		}
 	}()
@@ -52,6 +56,10 @@ func main() {
 	if err != nil {
 		slog.Error("failed to create discord session", "error", err)
 		os.Exit(1)
+	}
+
+	if config.Get().Verbose {
+		session.LogLevel = discordgo.LogDebug
 	}
 
 	if err := session.Open(); err != nil {
@@ -71,37 +79,36 @@ func main() {
 	slog.Debug("starting ticker", "interval", tickerDuration.String())
 	tick := time.NewTicker(tickerDuration)
 
-	wg := &sync.WaitGroup{}
 	go func() {
-		for {
-			select {
-			case <-tick.C:
-				_, err := register.Update(rootCtx)
-				if err != nil {
-					slog.Error("failed to update systems", "error", err)
-				}
-
-				if err := register.Fetch(rootCtx, out); err != nil {
-					slog.Error("failed to fetch killmails")
-				}
-			case msg := <-out:
-				if msg.KillmailID == 0 {
-					continue
-				}
-				wg.Add(1)
-				func() {
-					defer wg.Done()
-					embed, err := msg.Embed()
-					if err != nil {
-						slog.Error("failed to prepare embed", "error", err)
-						return
-					}
-					if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
-						slog.Error("failed to send message", "error", err)
-						return
-					}
-				}()
+		for range tick.C {
+			_, err := register.Update(rootCtx)
+			if err != nil {
+				slog.Error("failed to update systems", "error", err)
 			}
+
+			if err := register.Fetch(rootCtx, out); err != nil {
+				slog.Error("failed to fetch killmails")
+			}
+		}
+	}()
+
+	go func() {
+		for msg := range out {
+			if msg.KillmailID == 0 {
+				continue
+			}
+
+			embed, err := msg.Embed()
+			if err != nil {
+				slog.Error("failed to prepare embed", "error", err)
+				return
+			}
+			if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
+				slog.Error("failed to send message", "error", err)
+				return
+			}
+
+			common.GetBackpressureMonitor().Decrease("killmail")
 		}
 	}()
 
@@ -116,6 +123,5 @@ func main() {
 	tick.Stop()
 	session.Close()
 	close(out)
-	wg.Wait()
 	slog.Info("exiting")
 }

@@ -91,17 +91,23 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 	_, span := otel.Tracer(packageName).Start(ctx, "Update")
 	defer span.End()
 
+	logger := slog.Default().With(
+		"trace_id", span.SpanContext().TraceID().String(),
+		"span_id", span.SpanContext().SpanID().String(),
+	)
+
 	client := http.Client{}
 
 	origHash := listHash(s.systems)
 
 	url := fmt.Sprintf("%s/api/map/systems?slug=%s", config.Get().Wanderer.Host, config.Get().Wanderer.Slug)
-	slog.Debug("fetching systems on map", "url", url)
+	logger.Info("fetching systems on map", "url", url)
 	span.AddEvent("fetch systems", trace.WithAttributes(
 		attribute.String("url", url),
 	))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
+		logger.Error("failed to create request", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return false, err
@@ -112,6 +118,7 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Error("failed to fetch systems", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return false, err
@@ -121,22 +128,24 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&list); err != nil {
+		logger.Error("failed to decode systems", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		resp.Body.Close()
 		return false, err
 	}
+	resp.Body.Close()
 
 	tmpRegistry := make([]System, 0)
 
-	slog.Debug("filtering systems",
+	logger.Debug("filtering systems",
 		"wormholes_only", config.Get().OnlyWHKills,
 		"ignored_systems", config.Get().IgnoreSystems,
 	)
 
 	for _, sys := range list.Data {
-
 		if config.Get().OnlyWHKills && !isWH(sys) {
-			slog.Debug("discarding system",
+			logger.Debug("discarding system",
 				"reason", "wormhole kills only is turned on",
 				"system_name", sys.Name,
 				"system_id", sys.SolarSystemID,
@@ -145,7 +154,7 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 		}
 
 		if common.Contains(config.Get().IgnoreSystems, sys.Name) {
-			slog.Debug("discarding system",
+			logger.Debug("discarding system",
 				"reason", "system is on ignore list",
 				"system_name", sys.Name,
 				"system_id", sys.SolarSystemID,
@@ -166,7 +175,7 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 		s.mx.Unlock()
 	}
 
-	slog.Debug("fetch complete", "change", changed, "system_count", len(tmpRegistry))
+	logger.Debug("fetch complete", "change", changed, "system_count", len(tmpRegistry))
 	span.AddEvent("fetch complete", trace.WithAttributes(
 		attribute.Bool("change", changed),
 		attribute.Int("system_count", len(tmpRegistry)),
@@ -190,6 +199,14 @@ func (s *SystemRegister) Fetch(ctx context.Context, out chan Killmail) error {
 	span.SetAttributes(
 		attribute.StringSlice("systems", systemList),
 	)
+
+	slog.Debug(
+		"fetching killmails",
+		"trace_id", span.SpanContext().TraceID().String(),
+		"span_id", span.SpanContext().SpanID().String(),
+		"systems", s.systems,
+	)
+
 	kms, err := FetchKillmails(sctx, systems)
 	if err != nil {
 		span.RecordError(err)
@@ -198,6 +215,7 @@ func (s *SystemRegister) Fetch(ctx context.Context, out chan Killmail) error {
 	}
 
 	for _, km := range kms {
+		common.GetBackpressureMonitor().Increase("killmail")
 		out <- km
 	}
 
