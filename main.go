@@ -73,6 +73,7 @@ func main() {
 	tickerDuration := time.Duration(config.Get().RefreshInterval) * time.Second
 	slog.Debug("starting ticker", "interval", tickerDuration.String())
 	tick := time.NewTicker(tickerDuration)
+	wsTick := time.NewTicker(15 * time.Minute)
 
 	go func() {
 		for {
@@ -85,6 +86,16 @@ func main() {
 
 				if err := register.Fetch(rootCtx, out); err != nil {
 					slog.Error("failed to fetch killmails")
+				}
+			case <-wsTick.C:
+				slog.Info("restarting Discord websocket session")
+				if err := session.Close(); err != nil {
+					slog.Error("failed to close Discord session", "error", err)
+					return
+				}
+				if err := session.Open(); err != nil {
+					slog.Error("failed to reopen Discord session", "error", err)
+					return
 				}
 			case msg := <-out:
 				if msg.KillmailID == 0 {
