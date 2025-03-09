@@ -22,6 +22,11 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 	sctx, span := otel.Tracer(packageName).Start(ctx, "FetchKillmails")
 	defer span.End()
 
+	logger := slog.Default().With(
+		"trace_id", span.SpanContext().TraceID().String(),
+		"span_id", span.SpanContext().SpanID().String(),
+	)
+
 	mx := &sync.Mutex{}
 	killmails := make(map[string]Killmail)
 
@@ -39,7 +44,7 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 
 			kms, err := FetchSystemKillmails(sctx, fmt.Sprintf("%d", system.SolarSystemID))
 			if err != nil {
-				slog.Error("failed to fetch system killmails", "system", system.SolarSystemID, "error", err)
+				logger.Error("failed to fetch system killmails", "system", system.SolarSystemID, "error", err)
 				outerError = errors.Join(outerError, err)
 				return
 			}
@@ -51,7 +56,7 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 	}
 	wg.Wait()
 
-	slog.Debug("finished fetching killmails in the chain", "count", len(killmails))
+	logger.Info("finished fetching killmails in the chain", "count", len(killmails))
 	span.AddEvent("finished fetching killmails in the chain",
 		trace.WithAttributes(
 			attribute.Int("count", len(killmails)),
@@ -64,14 +69,20 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 	sctx, span := otel.Tracer(packageName).Start(ctx, "FetchSystemKillmails")
 	defer span.End()
 
+	logger := slog.Default().With(
+		"trace_id", span.SpanContext().TraceID().String(),
+		"span_id", span.SpanContext().SpanID().String(),
+	)
+
 	url := fmt.Sprintf("https://zkillboard.com/api/systemID/%s/pastSeconds/10800/", systemID)
-	slog.Debug("fetching killmails", "system", systemID, "url", url)
+	logger.Info("fetching killmails", "system", systemID, "url", url)
 	span.AddEvent("fetching killmails for system", trace.WithAttributes(
 		attribute.String("system", systemID),
 		attribute.String("url", url),
 	))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
+		logger.Error("failed to create request", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
@@ -80,6 +91,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		logger.Error("failed to fetch killmails", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
@@ -88,6 +100,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 	var killmails []Killmail
 	if err := decoder.Decode(&killmails); err != nil {
+		logger.Error("failed to decode killmails", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		resp.Body.Close()
@@ -97,6 +110,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 	cache, err := Cache()
 	if err != nil {
+		logger.Error("failed to get cache instance", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
@@ -116,11 +130,11 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
-			slog.Error("failed to check id in cache", "error", err)
+			logger.Error("failed to check id in cache", "error", err)
 			continue
 		} else if exists {
 			span.AddEvent("cache hit", trace.WithAttributes(attribute.String("id", id)))
-			slog.Debug("key already exists in cache", "id", id)
+			logger.Info("key already exists in cache", "id", id)
 			continue
 		}
 
@@ -128,6 +142,8 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 		esiKM, err := GetEsiKillmail(sctx, km.KillmailID, km.Zkill.Hash)
 		if err != nil {
+			logger.Error("failed to fetch killmail", "id", km.KillmailID, "hash", km.Zkill.Hash, "error", err)
+			span.RecordError(err)
 			return nil, err
 		}
 
@@ -145,7 +161,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 		if err := cache.AddItem(id); err != nil {
 			span.RecordError(err)
-			slog.Error("failed to add item to cache", "id", id, "error", err)
+			logger.Error("failed to add item to cache", "id", id, "error", err)
 		}
 	}
 
@@ -153,7 +169,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		attribute.String("system", systemID),
 		attribute.Int("count", len(kms)),
 	))
-	slog.Debug("finished fetching killmails in system", "id", systemID, "count", len(kms))
+	logger.Debug("finished fetching killmails in system", "id", systemID, "count", len(kms))
 
 	return kms, nil
 }
@@ -162,8 +178,13 @@ func GetEsiKillmail(ctx context.Context, id uint64, hash string) (Killmail, erro
 	_, span := otel.Tracer(packageName).Start(ctx, "FetchSystemKillmails")
 	defer span.End()
 
+	logger := slog.Default().With(
+		"trace_id", span.SpanContext().TraceID().String(),
+		"span_id", span.SpanContext().SpanID().String(),
+	)
+
 	url := fmt.Sprintf("https://esi.evetech.net/latest/killmails/%d/%s/?datasource=tranquility", id, hash)
-	slog.Debug("fetching killmail", "id", id, "hash", hash, "url", url)
+	logger.Debug("fetching killmail", "id", id, "hash", hash, "url", url)
 	span.AddEvent("fetching killmail", trace.WithAttributes(
 		attribute.Int64("killmail_id", int64(id)),
 		attribute.String("killmail_hash", hash),
@@ -172,6 +193,7 @@ func GetEsiKillmail(ctx context.Context, id uint64, hash string) (Killmail, erro
 
 	resp, err := http.Get(url)
 	if err != nil {
+		logger.Error("failed to fetch killmail", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return Killmail{}, err
@@ -180,6 +202,7 @@ func GetEsiKillmail(ctx context.Context, id uint64, hash string) (Killmail, erro
 	var km Killmail
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&km); err != nil {
+		logger.Error("failed to decode killmail", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		resp.Body.Close()
