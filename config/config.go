@@ -39,6 +39,7 @@ type Wanderer struct {
 }
 
 type Discord struct {
+	DryRun   bool `yaml:"dry_run"`
 	Token    string
 	Channels []string
 }
@@ -67,10 +68,11 @@ func Read(path string) error {
 		return err
 	}
 
+	// Create config instance with some default values
 	cfg := Cfg{
-		RefreshInterval: 60, // Default value
+		RefreshInterval: 60,
 		Redict: Redict{
-			TTL: 60,
+			TTL: 1440, // 24 hours
 		},
 	}
 

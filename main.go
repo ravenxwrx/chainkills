@@ -11,6 +11,7 @@ import (
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
+	"git.sr.ht/~barveyhirdman/chainkills/discord"
 	"git.sr.ht/~barveyhirdman/chainkills/instrumentation"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
 	"github.com/bwmarrin/discordgo"
@@ -53,11 +54,17 @@ func main() {
 		}
 	}()
 
+	discord.Init()
 	session, err := discordgo.New("Bot " + config.Get().Discord.Token)
 	if err != nil {
 		slog.Error("failed to create discord session", "error", err)
 		os.Exit(1)
 	}
+
+	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsMessageContent
+
+	session.AddHandler(discord.HandleGuildCreate)
+	session.AddHandler(discord.HandleGuildDelete)
 
 	if config.Get().Verbose {
 		session.LogLevel = discordgo.LogDebug
@@ -99,6 +106,25 @@ func main() {
 				continue
 			}
 
+			channels := config.Get().Discord.Channels
+
+			validChannels := make([]string, 0)
+			for _, c := range channels {
+				if _, err := session.State.Channel(c); err == nil {
+					validChannels = append(validChannels, c)
+				} else {
+					slog.Warn("channel not found", "channel", c)
+				}
+			}
+			slog.Info("asd", "dry run", config.Get().Discord.DryRun)
+			if config.Get().Discord.DryRun {
+				slog.Warn("dry run enabled, not sending message",
+					"message", msg,
+					"channels", validChannels,
+				)
+				continue
+			}
+
 			embed, err := msg.Embed()
 			if err != nil {
 				slog.Error("failed to prepare embed", "error", err)
@@ -106,7 +132,7 @@ func main() {
 			}
 			cwg := &sync.WaitGroup{}
 			common.GetBackpressureMonitor().Increase("channel_send")
-			for _, channel := range config.Get().Discord.Channels {
+			for _, channel := range validChannels {
 				cwg.Add(1)
 				go func(ccc string) {
 					defer func() {

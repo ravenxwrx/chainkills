@@ -126,7 +126,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		km := killmails[i]
 		id := fmt.Sprintf("%d", km.KillmailID)
 
-		exists, err := cache.Exists(id)
+		exists, err := cache.Exists(sctx, id)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
@@ -159,7 +159,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 		kms[id] = km
 
-		if err := cache.AddItem(id); err != nil {
+		if err := cache.AddItem(sctx, id); err != nil {
 			span.RecordError(err)
 			logger.Error("failed to add item to cache", "id", id, "error", err)
 		}
