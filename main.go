@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
@@ -103,10 +104,22 @@ func main() {
 				slog.Error("failed to prepare embed", "error", err)
 				return
 			}
-			if _, err := session.ChannelMessageSendEmbed(config.Get().Discord.Channel, embed); err != nil {
-				slog.Error("failed to send message", "error", err)
-				return
+			cwg := &sync.WaitGroup{}
+			common.GetBackpressureMonitor().Increase("channel_send")
+			for _, channel := range config.Get().Discord.Channels {
+				cwg.Add(1)
+				go func(ccc string) {
+					defer func() {
+						common.GetBackpressureMonitor().Decrease("channel_send")
+						cwg.Done()
+					}()
+					if _, err := session.ChannelMessageSendEmbed(ccc, embed); err != nil {
+						slog.Error("failed to send message", "error", err)
+						return
+					}
+				}(channel)
 			}
+			cwg.Wait()
 
 			common.GetBackpressureMonitor().Decrease("killmail")
 		}
