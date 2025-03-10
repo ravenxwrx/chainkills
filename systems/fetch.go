@@ -126,16 +126,18 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		km := killmails[i]
 		id := fmt.Sprintf("%d", km.KillmailID)
 
-		exists, err := cache.Exists(sctx, id)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			logger.Error("failed to check id in cache", "error", err)
-			continue
-		} else if exists {
-			span.AddEvent("cache hit", trace.WithAttributes(attribute.String("id", id)))
-			logger.Info("key already exists in cache", "id", id)
-			continue
+		if !config.Get().Discord.DryRun {
+			exists, err := cache.Exists(sctx, id)
+			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				logger.Error("failed to check id in cache", "error", err)
+				continue
+			} else if exists {
+				span.AddEvent("cache hit", trace.WithAttributes(attribute.String("id", id)))
+				logger.Info("key already exists in cache", "id", id)
+				continue
+			}
 		}
 
 		km.Zkill.URL = fmt.Sprintf("https://zkillboard.com/kill/%d/", km.KillmailID)
@@ -159,9 +161,11 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 		kms[id] = km
 
-		if err := cache.AddItem(sctx, id); err != nil {
-			span.RecordError(err)
-			logger.Error("failed to add item to cache", "id", id, "error", err)
+		if !config.Get().Discord.DryRun {
+			if err := cache.AddItem(sctx, id); err != nil {
+				span.RecordError(err)
+				logger.Error("failed to add item to cache", "id", id, "error", err)
+			}
 		}
 	}
 

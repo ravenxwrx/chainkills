@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
         - name: chainkills
-          image: ghcr.io/alfreddobradi/chainkills:v0.8.0
+          image: ghcr.io/alfreddobradi/chainkills:v0.8.1
           command:
             - 'chainkills'
             - '--config'

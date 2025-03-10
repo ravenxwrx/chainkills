@@ -12,18 +12,21 @@ import (
 var c *Cfg
 
 type Cfg struct {
-	Verbose         bool     `yaml:"verbose"`
-	AdminName       string   `yaml:"admin_name"`
-	AdminEmail      string   `yaml:"admin_email"`
-	AppName         string   `yaml:"app_name"`
-	Version         string   `yaml:"version"`
-	RefreshInterval int      `yaml:"refresh_interval"`
-	OnlyWHKills     bool     `yaml:"only_wh_kills"`
-	IgnoreSystems   []string `yaml:"ignore_systems"`
-	Redict          Redict   `yaml:"redict"`
-	Wanderer        Wanderer `yaml:"wanderer"`
-	Discord         Discord  `yaml:"discord"`
-	Friends         Friends  `yaml:"friends"`
+	Verbose           bool     `yaml:"verbose"`
+	AdminName         string   `yaml:"admin_name"`
+	AdminEmail        string   `yaml:"admin_email"`
+	AppName           string   `yaml:"app_name"`
+	Version           string   `yaml:"version"`
+	RefreshInterval   int      `yaml:"refresh_interval"`
+	OnlyWHKills       bool     `yaml:"only_wh_kills"`
+	IgnoreSystemNames []string `yaml:"ignore_system_names"`
+	IgnoreSystemIDs   []int    `yaml:"ignore_system_ids"`
+	IgnoreRegionIDs   []int    `yaml:"ignore_region_ids"`
+
+	Redict   Redict   `yaml:"redict"`
+	Wanderer Wanderer `yaml:"wanderer"`
+	Discord  Discord  `yaml:"discord"`
+	Friends  Friends  `yaml:"friends"`
 }
 
 type Redict struct {
