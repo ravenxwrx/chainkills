@@ -1,6 +1,7 @@
 package systems
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -15,16 +16,18 @@ func TestAll(t *testing.T) {
 	idExists := uuid.NewString()
 	idNotExists := uuid.NewString()
 
-	cache.AddItem(idExists)
+	ctx := context.Background()
+
+	require.NoError(t, cache.AddItem(ctx, idExists))
 
 	{
-		exists, err := cache.Exists(idExists)
+		exists, err := cache.Exists(ctx, idExists)
 		require.NoError(t, err)
 		require.True(t, exists)
 	}
 
 	{
-		exists, err := cache.Exists(idNotExists)
+		exists, err := cache.Exists(ctx, idNotExists)
 		require.NoError(t, err)
 		require.False(t, exists)
 	}
@@ -36,11 +39,13 @@ func TestEvict(t *testing.T) {
 
 	id := uuid.NewString()
 
-	cache.AddItem(id)
+	ctx := context.Background()
+
+	require.NoError(t, cache.AddItem(ctx, id))
 	cache.items[id] = time.Now().Add(-10 * time.Hour)
 	cache.evict()
 
-	exists, err := cache.Exists(id)
+	exists, err := cache.Exists(ctx, id)
 	require.NoError(t, err)
 	require.False(t, exists)
 }

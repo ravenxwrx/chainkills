@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -218,71 +217,6 @@ func (s *SystemRegister) Fetch(ctx context.Context, out chan Killmail) error {
 		common.GetBackpressureMonitor().Increase("killmail")
 		out <- km
 	}
-
-	return nil
-}
-
-func (s *SystemRegister) Start(outbox chan Killmail, refresh chan struct{}) {
-	s.mx.Lock()
-	systems := s.systems
-	s.mx.Unlock()
-
-	filters := buildFilters(systems)
-
-	slog.Debug("subscribing to channel", "channel", filters)
-
-	if err := s.ws.WriteJSON(filters); err != nil {
-		s.errors <- err
-	}
-
-	go func() {
-		for {
-			var msg Killmail
-			if err := s.ws.ReadJSON(&msg); err != nil {
-				if !errors.Is(err, &websocket.CloseError{}) {
-					slog.Error("failed to receive message", "error", err)
-				}
-				return
-			}
-
-			cache, err := Cache()
-			if err != nil {
-				slog.Error("failed to get Cache instance", "error", err)
-				return
-			}
-
-			if exists, _ := cache.Exists(fmt.Sprintf("%d", msg.KillmailID)); exists {
-				continue
-			} else {
-				if err := cache.AddItem(fmt.Sprintf("%d", msg.KillmailID)); err != nil {
-					slog.Error("failed to add item to cache", "id", msg.KillmailID, "error", err)
-				}
-			}
-
-			outbox <- msg
-		}
-	}()
-
-	go func() {
-		for range refresh {
-			filters := buildFilters(systems)
-
-			slog.Debug("subscribing to channel", "channel", filters)
-
-			if err := s.ws.WriteJSON(filters); err != nil {
-				s.errors <- err
-			}
-		}
-	}()
-}
-
-func (s *SystemRegister) Stop() error {
-	if err := s.ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
-		return err
-	}
-
-	slog.Debug("websocket listener stopped")
-	close(s.stop)
 
 	return nil
 }

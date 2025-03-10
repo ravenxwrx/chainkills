@@ -7,6 +7,9 @@ import (
 
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const (
@@ -19,8 +22,8 @@ var (
 )
 
 type CacheEngine interface {
-	AddItem(id string) error
-	Exists(id string) (bool, error)
+	AddItem(ctx context.Context, id string) error
+	Exists(ctx context.Context, id string) (bool, error)
 }
 
 type MemoryCache struct {
@@ -55,7 +58,7 @@ func Cache() (CacheEngine, error) {
 	return duplicateCache, err
 }
 
-func (c *MemoryCache) AddItem(id string) error {
+func (c *MemoryCache) AddItem(_ context.Context, id string) error {
 	c.mx.Lock()
 	defer c.mx.Unlock()
 
@@ -70,7 +73,7 @@ func (c *MemoryCache) AddItem(id string) error {
 	return nil
 }
 
-func (c *MemoryCache) Exists(id string) (bool, error) {
+func (c *MemoryCache) Exists(_ context.Context, id string) (bool, error) {
 	if _, ok := c.items[id]; ok {
 		return true, nil
 	}
@@ -92,7 +95,7 @@ type RedictCache struct {
 
 func newRedictCache(url string) (*RedictCache, error) {
 	redict := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: url,
 		DB:   1,
 	})
 
@@ -101,21 +104,34 @@ func newRedictCache(url string) (*RedictCache, error) {
 	}, nil
 }
 
-func (r *RedictCache) AddItem(id string) error {
+func (r *RedictCache) AddItem(ctx context.Context, id string) error {
+	_, span := otel.Tracer("chainkills").Start(ctx, "AddItem")
+	defer span.End()
+
 	if err := r.redict.Set(context.Background(), id, "", time.Duration(config.Get().Redict.TTL)*time.Minute).Err(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
 	return nil
 }
 
-func (r *RedictCache) Exists(id string) (bool, error) {
+func (r *RedictCache) Exists(ctx context.Context, id string) (bool, error) {
+	_, span := otel.Tracer("chainkills").Start(ctx, "Exists")
+	defer span.End()
+
 	_, err := r.redict.Get(context.Background(), id).Result()
 	if err == nil {
+		span.SetAttributes(attribute.String("cache", "hit"))
 		return true, nil
 	} else if err == redis.Nil {
+		span.SetAttributes(attribute.String("cache", "miss"))
 		return false, nil
 	}
+
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 
 	return false, err
 }
