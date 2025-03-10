@@ -39,6 +39,7 @@ type Wanderer struct {
 }
 
 type Discord struct {
+	DryRun   bool `yaml:"dry_run"`
 	Token    string
 	Channels []string
 }

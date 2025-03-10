@@ -51,7 +51,7 @@ func Cache() (CacheEngine, error) {
 		case "redict":
 			fallthrough
 		default:
-			duplicateCache, err = newRedictCache("redis://127.0.0.1:6379")
+			duplicateCache, err = newRedictCache("127.0.0.1:6379")
 		}
 	}
 
