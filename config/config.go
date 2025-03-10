@@ -39,8 +39,8 @@ type Wanderer struct {
 }
 
 type Discord struct {
-	Token   string
-	Channel string
+	Token    string
+	Channels []string
 }
 
 type Friends struct {
