@@ -20,6 +20,9 @@ const (
 	spanGetIgnoredSystemIDs   = "GetIgnoredSystemIDs"
 	spanGetIgnoredSystemNames = "GetIgnoredSystemNames"
 	spanGetIgnoredRegionIDs   = "GetIgnoredRegionIDs"
+	spanIgnoreSystemID        = "IgnoreSystemID"
+	spanIgnoreSystemName      = "IgnoreSystemName"
+	spanIgnoreRegionID        = "IgnoreRegionID"
 
 	keyIgnoredSystemIDs   = "ignored_system_ids"
 	keyIgnoredSystemNames = "ignored_system_names"
@@ -122,4 +125,52 @@ func (r *Backend) GetIgnoredRegionIDs(ctx context.Context) ([]string, error) {
 
 	span.SetStatus(codes.Ok, "ok")
 	return ids, nil
+}
+
+func (r *Backend) IgnoreSystemID(ctx context.Context, id int64) error {
+	sctx, span := otel.Tracer(packageName).Start(ctx, spanIgnoreSystemID)
+	defer span.End()
+
+	span.SetAttributes(attribute.Int64("id", id))
+
+	if _, err := r.redict.SAdd(sctx, keyIgnoredSystemIDs, id).Result(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	span.SetStatus(codes.Ok, "ok")
+	return nil
+}
+
+func (r *Backend) IgnoreSystemName(ctx context.Context, name string) error {
+	sctx, span := otel.Tracer(packageName).Start(ctx, spanIgnoreSystemName)
+	defer span.End()
+
+	span.SetAttributes(attribute.String("name", name))
+
+	if _, err := r.redict.SAdd(sctx, keyIgnoredSystemNames, name).Result(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	span.SetStatus(codes.Ok, "ok")
+	return nil
+}
+
+func (r *Backend) IgnoreRegionID(ctx context.Context, id int64) error {
+	sctx, span := otel.Tracer(packageName).Start(ctx, spanIgnoreRegionID)
+	defer span.End()
+
+	span.SetAttributes(attribute.Int64("id", id))
+
+	if _, err := r.redict.SAdd(sctx, keyIgnoredRegionIDs, id).Result(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	span.SetStatus(codes.Ok, "ok")
+	return nil
 }

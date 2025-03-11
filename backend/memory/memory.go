@@ -64,3 +64,12 @@ func (c *Backend) GetIgnoredSystemNames(ctx context.Context) ([]string, error) {
 func (c *Backend) GetIgnoredRegionIDs(ctx context.Context) ([]string, error) {
 	return make([]string, 0), nil
 }
+func (c *Backend) IgnoreSystemID(ctx context.Context, id int64) error {
+	return nil
+}
+func (c *Backend) IgnoreSystemName(ctx context.Context, name string) error {
+	return nil
+}
+func (c *Backend) IgnoreRegionID(ctx context.Context, id int64) error {
+	return nil
+}
