@@ -11,6 +11,16 @@ func GetSystem(systemID int) (CachedSystem, bool) {
 	return system, ok
 }
 
+func GetSystemByName(systemName string) (CachedSystem, bool) {
+	for _, system := range cachedSystems {
+		if system.SystemName == systemName {
+			return system, true
+		}
+	}
+
+	return CachedSystem{}, false
+}
+
 var cachedSystems = map[int]CachedSystem{
 	30000001: {RegionID: 10000001, SystemID: 30000001, SystemName: "Tanoo"},
 	30000002: {RegionID: 10000001, SystemID: 30000002, SystemName: "Lashesih"},

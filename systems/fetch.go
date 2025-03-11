@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"git.sr.ht/~barveyhirdman/chainkills/backend"
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"go.opentelemetry.io/otel"
@@ -37,13 +38,13 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 	for _, system := range systems {
 		wg.Add(1)
 		common.GetBackpressureMonitor().Increase("fetch_system_killmails")
-		go func(s System) {
+		go func(ctx context.Context, s System) {
 			defer func() {
 				common.GetBackpressureMonitor().Decrease("fetch_system_killmails")
 				wg.Done()
 			}()
 
-			kms, err := FetchSystemKillmails(sctx, fmt.Sprintf("%d", system.SolarSystemID))
+			kms, err := FetchSystemKillmails(ctx, fmt.Sprintf("%d", system.SolarSystemID))
 			if err != nil {
 				logger.Error("failed to fetch system killmails", "system", system.SolarSystemID, "error", err)
 				outerError = errors.Join(outerError, err)
@@ -53,7 +54,7 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 			mx.Lock()
 			maps.Copy(killmails, kms)
 			mx.Unlock()
-		}(system)
+		}(sctx, system)
 	}
 	wg.Wait()
 
@@ -69,6 +70,10 @@ func FetchKillmails(ctx context.Context, systems []System) (map[string]Killmail,
 func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Killmail, error) {
 	sctx, span := otel.Tracer(packageName).Start(ctx, "FetchSystemKillmails")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("system", systemID),
+	)
 
 	logger := slog.Default().With(
 		"trace_id", span.SpanContext().TraceID().String(),
@@ -96,7 +101,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		page++
 	}
 
-	cache, err := Cache()
+	cache, err := backend.Backend()
 	if err != nil {
 		logger.Error("failed to get cache instance", "error", err)
 		span.RecordError(err)
@@ -114,15 +119,14 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		km := killmails[i]
 		id := fmt.Sprintf("%d", km.KillmailID)
 
-		if !config.Get().Discord.DryRun {
-			exists, err := cache.Exists(sctx, id)
+		if config.Get().Redict.Cache {
+			exists, err := cache.KillmailExists(sctx, id)
 			if err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, err.Error())
 				logger.Error("failed to check id in cache", "error", err)
 				continue
 			} else if exists {
-				span.AddEvent("cache hit", trace.WithAttributes(attribute.String("id", id)))
 				logger.Info("key already exists in cache", "id", id)
 				continue
 			}
@@ -159,8 +163,8 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 		kms[id] = km
 
-		if !config.Get().Discord.DryRun {
-			if err := cache.AddItem(sctx, id); err != nil {
+		if config.Get().Redict.Cache {
+			if err := cache.AddKillmail(sctx, id); err != nil {
 				span.RecordError(err)
 				logger.Error("failed to add item to cache", "id", id, "error", err)
 			}

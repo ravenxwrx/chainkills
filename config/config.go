@@ -30,6 +30,7 @@ type Cfg struct {
 }
 
 type Redict struct {
+	Cache    bool
 	Database int    `yaml:"database"`
 	TTL      int    `yaml:"ttl"` // Time to live for keys in minutes
 	Address  string `yaml:"address"`
