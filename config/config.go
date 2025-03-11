@@ -13,26 +13,25 @@ var c *Cfg
 
 type Cfg struct {
 	Verbose           bool     `yaml:"verbose"`
+	OnlyWHKills       bool     `yaml:"only_wh_kills"`
+	RefreshInterval   int      `yaml:"refresh_interval"`
 	AdminName         string   `yaml:"admin_name"`
 	AdminEmail        string   `yaml:"admin_email"`
 	AppName           string   `yaml:"app_name"`
 	Version           string   `yaml:"version"`
-	RefreshInterval   int      `yaml:"refresh_interval"`
-	OnlyWHKills       bool     `yaml:"only_wh_kills"`
 	IgnoreSystemNames []string `yaml:"ignore_system_names"`
 	IgnoreSystemIDs   []int    `yaml:"ignore_system_ids"`
 	IgnoreRegionIDs   []int    `yaml:"ignore_region_ids"`
-
-	Redict   Redict   `yaml:"redict"`
-	Wanderer Wanderer `yaml:"wanderer"`
-	Discord  Discord  `yaml:"discord"`
-	Friends  Friends  `yaml:"friends"`
+	Redict            Redict   `yaml:"redict"`
+	Wanderer          Wanderer `yaml:"wanderer"`
+	Discord           Discord  `yaml:"discord"`
+	Friends           Friends  `yaml:"friends"`
 }
 
 type Redict struct {
-	Address  string `yaml:"address"`
 	Database int    `yaml:"database"`
 	TTL      int    `yaml:"ttl"` // Time to live for keys in minutes
+	Address  string `yaml:"address"`
 }
 
 type Wanderer struct {
@@ -43,6 +42,7 @@ type Wanderer struct {
 
 type Discord struct {
 	DryRun   bool `yaml:"dry_run"`
+	Verbose  bool
 	Token    string
 	Channels []string
 }

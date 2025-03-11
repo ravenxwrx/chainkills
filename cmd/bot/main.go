@@ -66,7 +66,7 @@ func main() {
 	session.AddHandler(discord.HandleGuildCreate)
 	session.AddHandler(discord.HandleGuildDelete)
 
-	if config.Get().Verbose {
+	if config.Get().Discord.Verbose {
 		session.LogLevel = discordgo.LogDebug
 	}
 
