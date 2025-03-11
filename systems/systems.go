@@ -137,9 +137,11 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 
 	tmpRegistry := make([]System, 0)
 
-	logger.Debug("filtering systems",
+	logger.Info("filtering systems",
 		"wormholes_only", config.Get().OnlyWHKills,
-		"ignored_systems", config.Get().IgnoreSystems,
+		"ignored_system_names", config.Get().IgnoreSystemNames,
+		"ignored_system_ids", config.Get().IgnoreSystemIDs,
+		"ignored_region_ids", config.Get().IgnoreRegionIDs,
 	)
 
 	for _, sys := range list.Data {
@@ -152,13 +154,36 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 			continue
 		}
 
-		if common.Contains(config.Get().IgnoreSystems, sys.Name) {
+		if common.Contains(config.Get().IgnoreSystemNames, sys.Name) {
 			logger.Debug("discarding system",
 				"reason", "system is on ignore list",
 				"system_name", sys.Name,
 				"system_id", sys.SolarSystemID,
 			)
 			continue
+		}
+
+		if common.Contains(config.Get().IgnoreSystemIDs, sys.SolarSystemID) {
+			logger.Debug("discarding system",
+				"reason", "system is on ignore list",
+				"system_name", sys.Name,
+				"system_id", sys.SolarSystemID,
+			)
+			continue
+		}
+
+		systemData, ok := GetSystem(sys.SolarSystemID)
+		if ok {
+			if common.Contains(config.Get().IgnoreRegionIDs, systemData.RegionID) {
+				logger.Debug("discarding system",
+					"reason", "system is on ignore list",
+					"system_name", sys.Name,
+					"system_id", sys.SolarSystemID,
+				)
+				continue
+			}
+		} else {
+			slog.Warn("failed to get system data", "system_id", sys.SolarSystemID)
 		}
 
 		tmpRegistry = append(tmpRegistry, sys)
