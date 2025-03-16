@@ -2,6 +2,7 @@ package redict
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -50,7 +51,8 @@ func (r *Backend) AddKillmail(ctx context.Context, id string) error {
 
 	span.SetAttributes(attribute.String("id", id))
 
-	if err := r.redict.Set(context.Background(), id, "", time.Duration(config.Get().Redict.TTL)*time.Minute).Err(); err != nil {
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, id)
+	if err := r.redict.Set(context.Background(), key, "", time.Duration(config.Get().Redict.TTL)*time.Minute).Err(); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -67,7 +69,8 @@ func (r *Backend) KillmailExists(ctx context.Context, id string) (bool, error) {
 
 	span.SetAttributes(attribute.String("id", id))
 
-	_, err := r.redict.Get(context.Background(), id).Result()
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, id)
+	_, err := r.redict.Get(context.Background(), key).Result()
 	if err == nil {
 		span.SetAttributes(attribute.String("cache", "hit"))
 		slog.Debug("cache hit", "id", id)
@@ -88,7 +91,8 @@ func (r *Backend) GetIgnoredSystemIDs(ctx context.Context) ([]string, error) {
 	_, span := otel.Tracer(packageName).Start(ctx, spanGetIgnoredSystemIDs)
 	defer span.End()
 
-	ids, err := r.redict.SMembers(context.Background(), keyIgnoredSystemIDs).Result()
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyIgnoredSystemIDs)
+	ids, err := r.redict.SMembers(context.Background(), key).Result()
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -102,7 +106,8 @@ func (r *Backend) GetIgnoredSystemNames(ctx context.Context) ([]string, error) {
 	_, span := otel.Tracer(packageName).Start(ctx, spanGetIgnoredSystemNames)
 	defer span.End()
 
-	ids, err := r.redict.SMembers(context.Background(), keyIgnoredSystemNames).Result()
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyIgnoredSystemNames)
+	ids, err := r.redict.SMembers(context.Background(), key).Result()
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -116,7 +121,8 @@ func (r *Backend) GetIgnoredRegionIDs(ctx context.Context) ([]string, error) {
 	_, span := otel.Tracer(packageName).Start(ctx, spanGetIgnoredRegionIDs)
 	defer span.End()
 
-	ids, err := r.redict.SMembers(context.Background(), keyIgnoredRegionIDs).Result()
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyIgnoredRegionIDs)
+	ids, err := r.redict.SMembers(context.Background(), key).Result()
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -133,7 +139,8 @@ func (r *Backend) IgnoreSystemID(ctx context.Context, id int64) error {
 
 	span.SetAttributes(attribute.Int64("id", id))
 
-	if _, err := r.redict.SAdd(sctx, keyIgnoredSystemIDs, id).Result(); err != nil {
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyIgnoredSystemIDs)
+	if _, err := r.redict.SAdd(sctx, key, id).Result(); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -149,7 +156,8 @@ func (r *Backend) IgnoreSystemName(ctx context.Context, name string) error {
 
 	span.SetAttributes(attribute.String("name", name))
 
-	if _, err := r.redict.SAdd(sctx, keyIgnoredSystemNames, name).Result(); err != nil {
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyIgnoredSystemNames)
+	if _, err := r.redict.SAdd(sctx, key, name).Result(); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -165,7 +173,8 @@ func (r *Backend) IgnoreRegionID(ctx context.Context, id int64) error {
 
 	span.SetAttributes(attribute.Int64("id", id))
 
-	if _, err := r.redict.SAdd(sctx, keyIgnoredRegionIDs, id).Result(); err != nil {
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyIgnoredRegionIDs)
+	if _, err := r.redict.SAdd(sctx, key, id).Result(); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
