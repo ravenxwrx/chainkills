@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"sync"
+	"time"
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
@@ -74,39 +75,26 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		"span_id", span.SpanContext().SpanID().String(),
 	)
 
-	url := fmt.Sprintf("https://zkillboard.com/api/systemID/%s/pastSeconds/10800/", systemID)
-	logger.Info("fetching killmails", "system", systemID, "url", url)
-	span.AddEvent("fetching killmails for system", trace.WithAttributes(
-		attribute.String("system", systemID),
-		attribute.String("url", url),
-	))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		logger.Error("failed to create request", "error", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
-	}
-	req.Header.Set("User-Agent", fmt.Sprintf("%s/%s:%s %s", config.Get().AdminName, config.Get().AppName, config.Get().Version, config.Get().AdminEmail))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		logger.Error("failed to fetch killmails", "error", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
-	}
-	decoder := json.NewDecoder(resp.Body)
-
 	var killmails []Killmail
-	if err := decoder.Decode(&killmails); err != nil {
-		logger.Error("failed to decode killmails", "error", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		resp.Body.Close()
-		return nil, err
+
+	page := 1
+	timeframe := config.Get().FetchTimeFrame * 3600
+
+	for {
+		kms, err := fetchSystemKillmailsPage(logger, span, systemID, timeframe, page)
+		if err != nil {
+			logger.Error("failed to fetch killmails", "system", systemID, "error", err)
+			span.RecordError(err)
+			break
+		}
+
+		if len(kms) == 0 {
+			break
+		}
+
+		killmails = append(killmails, kms...)
+		page++
 	}
-	resp.Body.Close()
 
 	cache, err := Cache()
 	if err != nil {
@@ -158,6 +146,16 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		}
 
 		km.Victim = esiKM.Victim
+		km.OriginalTimestamp = esiKM.OriginalTimestamp
+
+		deviation := time.Since(km.OriginalTimestamp)
+
+		logger.Info("retrieved new killmail",
+			"id", km.KillmailID,
+			"hash", km.Zkill.Hash,
+			"original_timestamp", km.OriginalTimestamp,
+			"deviation", fmt.Sprintf("%d", deviation/time.Minute),
+		)
 
 		kms[id] = km
 
@@ -215,4 +213,43 @@ func GetEsiKillmail(ctx context.Context, id uint64, hash string) (Killmail, erro
 	resp.Body.Close()
 
 	return km, nil
+}
+
+func fetchSystemKillmailsPage(logger *slog.Logger, span trace.Span, systemID string, timeframe, page int) ([]Killmail, error) {
+	var killmails []Killmail
+	url := fmt.Sprintf("https://zkillboard.com/api/systemID/%s/pastSeconds/%d/page/%d/", systemID, timeframe, page)
+	logger.Info("fetching killmails", "system", systemID, "url", url)
+	span.AddEvent("fetching killmails for system", trace.WithAttributes(
+		attribute.String("system", systemID),
+		attribute.Int("timeframe", config.Get().FetchTimeFrame),
+		attribute.Int("page", page),
+		attribute.String("url", url),
+	))
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		logger.Error("failed to create request", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	req.Header.Set("User-Agent", fmt.Sprintf("%s/%s:%s %s", config.Get().AdminName, config.Get().AppName, config.Get().Version, config.Get().AdminEmail))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.Error("failed to fetch killmails", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&killmails); err != nil {
+		logger.Error("failed to decode killmails", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		resp.Body.Close()
+		return nil, err
+	}
+	resp.Body.Close()
+
+	return killmails, nil
 }

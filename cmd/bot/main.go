@@ -116,7 +116,6 @@ func main() {
 					slog.Warn("channel not found", "channel", c)
 				}
 			}
-			slog.Info("asd", "dry run", config.Get().Discord.DryRun)
 			if config.Get().Discord.DryRun {
 				slog.Warn("dry run enabled, not sending message",
 					"message", msg,

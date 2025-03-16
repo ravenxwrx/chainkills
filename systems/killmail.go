@@ -2,6 +2,7 @@ package systems
 
 import (
 	"log/slog"
+	"time"
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
@@ -10,10 +11,11 @@ import (
 )
 
 type Killmail struct {
-	KillmailID uint64          `json:"killmail_id"`
-	Attackers  []CharacterInfo `json:"attackers"`
-	Victim     CharacterInfo   `json:"victim"`
-	Zkill      struct {
+	KillmailID        uint64          `json:"killmail_id"`
+	Attackers         []CharacterInfo `json:"attackers"`
+	Victim            CharacterInfo   `json:"victim"`
+	OriginalTimestamp time.Time       `json:"killmail_time"`
+	Zkill             struct {
 		URL  string `json:"url"`
 		Hash string `json:"hash"`
 		NPC  bool   `json:"npc"`
