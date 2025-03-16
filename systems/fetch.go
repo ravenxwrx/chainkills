@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"sync"
+	"time"
 
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
@@ -147,10 +148,13 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 		km.Victim = esiKM.Victim
 		km.OriginalTimestamp = esiKM.OriginalTimestamp
 
+		deviation := time.Since(km.OriginalTimestamp)
+
 		slog.Info("retrieved new killmail",
 			"id", km.KillmailID,
 			"hash", km.Zkill.Hash,
 			"original_timestamp", km.OriginalTimestamp,
+			"deviation", fmt.Sprintf("%d", deviation/time.Minute),
 		)
 
 		kms[id] = km
