@@ -150,7 +150,7 @@ func FetchSystemKillmails(ctx context.Context, systemID string) (map[string]Kill
 
 		deviation := time.Since(km.OriginalTimestamp)
 
-		slog.Info("retrieved new killmail",
+		logger.Info("retrieved new killmail",
 			"id", km.KillmailID,
 			"hash", km.Zkill.Hash,
 			"original_timestamp", km.OriginalTimestamp,
