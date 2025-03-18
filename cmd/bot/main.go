@@ -87,16 +87,29 @@ func main() {
 	slog.Debug("starting ticker", "interval", tickerDuration.String())
 	tick := time.NewTicker(tickerDuration)
 
+	errors := make(chan error)
 	go func() {
-		for range tick.C {
-			_, err := register.Update(rootCtx)
-			if err != nil {
-				slog.Error("failed to update systems", "error", err)
-			}
+		for {
+			select {
+			case <-tick.C:
+				_, err := register.Update(rootCtx)
+				if err != nil {
+					slog.Error("failed to update systems", "error", err)
+				}
 
-			if err := register.Fetch(rootCtx, out); err != nil {
-				slog.Error("failed to fetch killmails")
+				// if err := register.Fetch(rootCtx, out); err != nil {
+				// 	slog.Error("failed to fetch killmails")
+				// }
+			case e := <-errors:
+				slog.Error("error received", "error", e)
 			}
+		}
+	}()
+
+	stop := make(chan struct{})
+	go func() {
+		if err := systems.StartListener(out, stop, errors); err != nil {
+			slog.Error("failed to start listener", "error", err)
 		}
 	}()
 
@@ -150,14 +163,15 @@ func main() {
 		}
 	}()
 
-	if err := register.Fetch(rootCtx, out); err != nil {
-		slog.Error("failed to fetch killmails")
-	}
+	// if err := register.Fetch(rootCtx, out); err != nil {
+	// 	slog.Error("failed to fetch killmails")
+	// }
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 
 	<-sigChan
+	close(stop)
 	tick.Stop()
 	session.Close()
 	close(out)
