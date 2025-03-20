@@ -10,7 +10,6 @@ import (
 )
 
 func StartListener(outbox chan Killmail, stop chan struct{}, errchan chan error) error {
-
 	// connect to websocket
 	u := url.URL{Scheme: "wss", Host: "zkillboard.com", Path: "/websocket/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)

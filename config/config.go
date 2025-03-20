@@ -27,6 +27,7 @@ type Cfg struct {
 	Wanderer          Wanderer `yaml:"wanderer"`
 	Discord           Discord  `yaml:"discord"`
 	Friends           Friends  `yaml:"friends"`
+	HealthPort        uint16   `yaml:"health_port"`
 }
 
 type Redict struct {
@@ -74,6 +75,7 @@ func Read(path string) error {
 
 	// Create config instance with some default values
 	cfg := Cfg{
+		HealthPort:      9101,
 		RefreshInterval: 60,
 		FetchTimeFrame:  1,
 		Redict: Redict{

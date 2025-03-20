@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -106,10 +108,13 @@ func main() {
 		}
 	}()
 
+	healthy := true
+
 	stop := make(chan struct{})
 	go func() {
 		if err := systems.StartListener(out, stop, errors); err != nil {
 			slog.Error("failed to start listener", "error", err)
+			healthy = false
 		}
 	}()
 
@@ -167,6 +172,35 @@ func main() {
 	// 	slog.Error("failed to fetch killmails")
 	// }
 
+	health := http.Server{
+		Addr: fmt.Sprintf(":%d", config.Get().HealthPort),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
+				slog.Debug("healthcheck request", "healthy", healthy)
+				if healthy {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte("OK")) //nolint:errcheck
+				} else {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("NOT OK")) //nolint:errcheck
+				}
+			} else {
+				slog.Debug("invalid http request",
+					"method", http.MethodGet,
+					"path", r.URL.Path,
+				)
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte("Not found")) //nolint:errcheck
+			}
+		}),
+	}
+
+	go func() {
+		if err := health.ListenAndServe(); err != nil {
+			slog.Error("failed to start health server", "error", err)
+		}
+	}()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 
@@ -175,5 +209,6 @@ func main() {
 	tick.Stop()
 	session.Close()
 	close(out)
+	health.Shutdown(rootCtx) //nolint:errcheck
 	slog.Info("exiting")
 }
