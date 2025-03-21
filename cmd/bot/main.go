@@ -40,7 +40,7 @@ func main() {
 	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})
-	l := slog.New(h)
+	l := slog.New(h).With("version", config.Get().Version)
 	slog.SetDefault(l)
 
 	shutdownFns, err := instrumentation.Init(rootCtx)
