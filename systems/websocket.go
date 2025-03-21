@@ -1,6 +1,7 @@
 package systems
 
 import (
+	"fmt"
 	"log"
 	"log/slog"
 	"net/url"
@@ -10,7 +11,6 @@ import (
 )
 
 func StartListener(outbox chan Killmail, stop chan struct{}, errchan chan error) error {
-
 	// connect to websocket
 	u := url.URL{Scheme: "wss", Host: "zkillboard.com", Path: "/websocket/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -42,7 +42,7 @@ func StartListener(outbox chan Killmail, stop chan struct{}, errchan chan error)
 			err := c.ReadJSON(&killmail)
 			if err != nil {
 				if _, ok := err.(*websocket.CloseError); ok {
-					slog.Info("websocket connection closed")
+					slog.Error("websocket connection closed", "error", err)
 					return
 				}
 				errchan <- err
@@ -74,11 +74,14 @@ func StartListener(outbox chan Killmail, stop chan struct{}, errchan chan error)
 				continue
 			}
 
+			deviation := time.Since(killmail.OriginalTimestamp)
+
 			slog.Info("received new killmail",
 				"original_timestamp", killmail.OriginalTimestamp,
 				"id", killmail.KillmailID,
 				"hash", killmail.Zkill.Hash,
 				"url", killmail.Zkill.URL,
+				"deviation", fmt.Sprintf("%d", deviation/time.Minute),
 			)
 
 			outbox <- killmail

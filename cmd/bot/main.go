@@ -107,9 +107,19 @@ func main() {
 	}()
 
 	stop := make(chan struct{})
+	fetchLoop := true
 	go func() {
-		if err := systems.StartListener(out, stop, errors); err != nil {
-			slog.Error("failed to start listener", "error", err)
+		retries := 0
+		for {
+			if err := systems.StartListener(out, stop, errors); err != nil {
+				slog.Error("failed to start listener", "error", err)
+			}
+			if !fetchLoop {
+				return
+			}
+			dur := 5 * time.Second
+			slog.Warn("listener failed", "retries", retries, "sleep", dur.String())
+			time.Sleep(dur)
 		}
 	}()
 
@@ -171,6 +181,7 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt)
 
 	<-sigChan
+	fetchLoop = false
 	close(stop)
 	tick.Stop()
 	session.Close()
