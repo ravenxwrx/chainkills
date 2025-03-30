@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,33 +65,47 @@ func main() {
 
 	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsMessageContent
 
-	registeredCommands := make([]*discordgo.ApplicationCommand, 0)
+	registeredCommands := make(map[string]*discordgo.ApplicationCommand, 0)
+	registeredHandlers := make(map[string]func(), 0)
 
-	session.AddHandler(discord.HandleGuildCreate)
-	session.AddHandler(discord.HandleGuildDelete)
-	session.AddHandler(discord.HandleIgnoreSystemID)
-	session.AddHandler(discord.HandleIgnoreSystemName)
-	session.AddHandler(discord.HandleIgnoreRegionID)
+	registeredHandlers["HandleGuildCreate"] = session.AddHandler(discord.HandleGuildCreate)
+	registeredHandlers["HandleGuildDelete"] = session.AddHandler(discord.HandleGuildDelete)
+	registeredHandlers["HandleSlasCommand"] = session.AddHandler(discord.HandleSlashCommand)
+
+	commands := []*discordgo.ApplicationCommand{
+		discord.IgnoreSystemIDCommand,
+		discord.IgnoreSystemNameCommand,
+		discord.IgnoreRegionIDCommand,
+	}
+	cmdWg := &sync.WaitGroup{}
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.Ready) {
-		if cmd, err := session.ApplicationCommandCreate(session.State.User.ID, "", discord.IgnoreSystemIDCommand); err != nil {
-			slog.Error("failed to create command", "command", discord.IgnoreSystemIDCommand.Name, "error", err)
-		} else {
-			registeredCommands = append(registeredCommands, cmd)
-		}
-		if cmd, err := session.ApplicationCommandCreate(session.State.User.ID, "", discord.IgnoreSystemNameCommand); err != nil {
-			slog.Error("failed to create command", "command", discord.IgnoreSystemNameCommand.Name, "error", err)
-		} else {
-			registeredCommands = append(registeredCommands, cmd)
-		}
-		if cmd, err := session.ApplicationCommandCreate(session.State.User.ID, "", discord.IgnoreRegionIDCommand); err != nil {
-			slog.Error("failed to create command", "command", discord.IgnoreRegionIDCommand.Name, "error", err)
-		} else {
-			registeredCommands = append(registeredCommands, cmd)
+		for _, cmd := range commands {
+			cmdWg.Add(1)
+
+			go func(c *discordgo.ApplicationCommand) {
+				defer cmdWg.Done()
+
+				if _, err := s.ApplicationCommandCreate(s.State.User.ID, "", c); err != nil {
+					slog.Error("failed to register command", "command", cmd.Name, "error", err)
+					return
+				}
+
+				opts := make([]string, 0, len(c.Options))
+				for _, opt := range c.Options {
+					opts = append(opts, fmt.Sprintf("%s - %s", opt.Name, opt.Type.String()))
+				}
+				slog.Info("registered command", "command", c.Name, "options", strings.Join(opts, ", "))
+				registeredCommands[c.Name] = c
+			}(cmd)
 		}
 	})
 
 	defer func() {
 		if session.State != nil && session.State.User != nil {
+			for _, v := range registeredHandlers {
+				v()
+			}
+
 			for _, v := range registeredCommands {
 				err := session.ApplicationCommandDelete(session.State.User.ID, "", v.ID)
 				if err != nil {
@@ -116,6 +132,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// wait for commands to be registered
+	slog.Info("waiting for commands to be registered")
+	cmdWg.Wait()
+
 	out := make(chan systems.Killmail)
 
 	tickerDuration := time.Duration(config.Get().RefreshInterval) * time.Second
@@ -131,10 +151,6 @@ func main() {
 				if err != nil {
 					slog.Error("failed to update systems", "error", err)
 				}
-
-				// if err := register.Fetch(rootCtx, out); err != nil {
-				// 	slog.Error("failed to fetch killmails")
-				// }
 			case e := <-errors:
 				slog.Error("error received", "error", e)
 			}
@@ -207,10 +223,6 @@ func main() {
 			common.GetBackpressureMonitor().Decrease("killmail")
 		}
 	}()
-
-	// if err := register.Fetch(rootCtx, out); err != nil {
-	// 	slog.Error("failed to fetch killmails")
-	// }
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)

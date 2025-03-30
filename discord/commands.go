@@ -52,8 +52,8 @@ var IgnoreRegionIDCommand = &discordgo.ApplicationCommand{
 	},
 }
 
-func HandleIgnoreSystemID(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ctx, span := otel.Tracer(packageName).Start(context.Background(), "HandleIgnoreSystemID")
+func HandleIgnoreSystemID(ctx context.Context, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sctx, span := otel.Tracer(packageName).Start(context.Background(), "HandleIgnoreSystemID")
 	defer span.End()
 
 	backend, err := backend.Backend()
@@ -64,7 +64,7 @@ func HandleIgnoreSystemID(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
-	if err := backend.IgnoreSystemID(ctx, i.ApplicationCommandData().Options[0].IntValue()); err != nil {
+	if err := backend.IgnoreSystemID(sctx, i.ApplicationCommandData().Options[0].IntValue()); err != nil {
 		slog.Error("failed to add ignored system id", "error", err)
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
@@ -90,8 +90,27 @@ func HandleIgnoreSystemID(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	span.SetStatus(codes.Ok, "ok")
 }
 
-func HandleIgnoreSystemName(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ctx, span := otel.Tracer(packageName).Start(context.Background(), "HandleIgnoreSystemName")
+func HandleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx, span := otel.Tracer(packageName).Start(context.Background(), "HandleSlashCommand")
+	defer span.End()
+
+	// Check if the command is a slash command
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	switch i.ApplicationCommandData().Name {
+	case "ignore-system-id":
+		HandleIgnoreSystemID(ctx, s, i)
+	case "ignore-system-name":
+		HandleIgnoreSystemName(ctx, s, i)
+	case "ignore-region-id":
+		HandleIgnoreRegionID(ctx, s, i)
+	}
+}
+
+func HandleIgnoreSystemName(ctx context.Context, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sctx, span := otel.Tracer(packageName).Start(context.Background(), "HandleIgnoreSystemName")
 	defer span.End()
 
 	backend, err := backend.Backend()
@@ -104,7 +123,7 @@ func HandleIgnoreSystemName(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	systemName := i.ApplicationCommandData().Options[0].StringValue()
 
-	if err := backend.IgnoreSystemName(ctx, systemName); err != nil {
+	if err := backend.IgnoreSystemName(sctx, systemName); err != nil {
 		slog.Error("failed to add ignored system name", "error", err)
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
@@ -128,8 +147,8 @@ func HandleIgnoreSystemName(s *discordgo.Session, i *discordgo.InteractionCreate
 	span.SetStatus(codes.Ok, "ok")
 }
 
-func HandleIgnoreRegionID(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ctx, span := otel.Tracer(packageName).Start(context.Background(), "HandleIgnoreSystemID")
+func HandleIgnoreRegionID(ctx context.Context, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sctx, span := otel.Tracer(packageName).Start(context.Background(), "HandleIgnoreRegionID")
 	defer span.End()
 
 	backend, err := backend.Backend()
@@ -140,7 +159,7 @@ func HandleIgnoreRegionID(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
-	if err := backend.IgnoreSystemID(ctx, i.ApplicationCommandData().Options[0].IntValue()); err != nil {
+	if err := backend.IgnoreSystemID(sctx, i.ApplicationCommandData().Options[0].IntValue()); err != nil {
 		slog.Error("failed to add ignored system id", "error", err)
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
