@@ -16,16 +16,24 @@ import (
 	"git.sr.ht/~barveyhirdman/chainkills/discord"
 	"git.sr.ht/~barveyhirdman/chainkills/instrumentation"
 	"git.sr.ht/~barveyhirdman/chainkills/systems"
+	"git.sr.ht/~barveyhirdman/chainkills/version"
 	"github.com/bwmarrin/discordgo"
 )
 
 var (
 	configPath string
+	ver        bool
 )
 
 func main() {
 	flag.StringVar(&configPath, "config", "config.yaml", "Path to config")
+	flag.BoolVar(&ver, "version", false, "Print version and exit")
 	flag.Parse()
+
+	if ver {
+		version.Print()
+		os.Exit(0)
+	}
 
 	rootCtx := context.Background()
 
