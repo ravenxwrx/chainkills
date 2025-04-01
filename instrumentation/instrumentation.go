@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -50,7 +51,7 @@ func Init(ctx context.Context) (*ShutdownFunctions, error) {
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("chainkills"),
+			semconv.ServiceName(config.Get().AppName),
 		),
 	)
 	if err != nil {

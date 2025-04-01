@@ -30,9 +30,11 @@ type Cfg struct {
 }
 
 type Redict struct {
+	Cache    bool
 	Database int    `yaml:"database"`
 	TTL      int    `yaml:"ttl"` // Time to live for keys in minutes
 	Address  string `yaml:"address"`
+	Prefix   string `yaml:"prefix"`
 }
 
 type Wanderer struct {
@@ -77,7 +79,8 @@ func Read(path string) error {
 		RefreshInterval: 60,
 		FetchTimeFrame:  1,
 		Redict: Redict{
-			TTL: 1440, // 24 hours
+			TTL:    1440, // 24 hours
+			Prefix: "global",
 		},
 	}
 

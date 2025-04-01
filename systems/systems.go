@@ -9,9 +9,10 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
-	"strings"
+	"strconv"
 	"sync"
 
+	"git.sr.ht/~barveyhirdman/chainkills/backend"
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"github.com/gorilla/websocket"
@@ -139,12 +140,13 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 
 	logger.Info("filtering systems",
 		"wormholes_only", config.Get().OnlyWHKills,
-		"ignored_system_names", config.Get().IgnoreSystemNames,
-		"ignored_system_ids", config.Get().IgnoreSystemIDs,
-		"ignored_region_ids", config.Get().IgnoreRegionIDs,
+		"ignored_system_names", ignoredSystemNames(),
+		"ignored_system_ids", ignoredSystemIDs(),
+		"ignored_region_ids", ignoredRegionIDs(),
 	)
 
 	for _, sys := range list.Data {
+
 		if config.Get().OnlyWHKills && !isWH(sys) {
 			logger.Debug("discarding system",
 				"reason", "wormhole kills only is turned on",
@@ -154,7 +156,7 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 			continue
 		}
 
-		if common.Contains(config.Get().IgnoreSystemNames, sys.Name) {
+		if common.ContainsKey(ignoredSystemNames(), sys.Name) {
 			logger.Debug("discarding system",
 				"reason", "system is on ignore list",
 				"system_name", sys.Name,
@@ -163,7 +165,7 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 			continue
 		}
 
-		if common.Contains(config.Get().IgnoreSystemIDs, sys.SolarSystemID) {
+		if common.ContainsKey(ignoredSystemIDs(), sys.SolarSystemID) {
 			logger.Debug("discarding system",
 				"reason", "system is on ignore list",
 				"system_name", sys.Name,
@@ -174,11 +176,12 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 
 		systemData, ok := GetSystem(sys.SolarSystemID)
 		if ok {
-			if common.Contains(config.Get().IgnoreRegionIDs, systemData.RegionID) {
+			if common.ContainsKey(ignoredRegionIDs(), systemData.RegionID) {
 				logger.Debug("discarding system",
-					"reason", "system is on ignore list",
+					"reason", "region is on ignore list",
 					"system_name", sys.Name,
 					"system_id", sys.SolarSystemID,
+					"region_id", systemData.RegionID,
 				)
 				continue
 			}
@@ -246,24 +249,84 @@ func (s *SystemRegister) Fetch(ctx context.Context, out chan Killmail) error {
 	return nil
 }
 
-func buildFilters(systems []System) map[string]string {
-	channel := "killstream"
-
-	if len(systems) > 0 {
-		systemNames := make([]string, 0)
-		for _, sys := range systems {
-			systemNames = append(systemNames, fmt.Sprintf("%d", sys.SolarSystemID))
-		}
-
-		channel = fmt.Sprintf("system:%s", strings.Join(systemNames, ","))
-	}
-
-	return map[string]string{
-		"action":  "sub",
-		"channel": channel,
-	}
-}
-
 func isWH(sys System) bool {
 	return whPattern.MatchString(sys.Name)
+}
+
+// ignoredSystemIDs returns a map of system IDs that should be ignored
+// from the config and the backend both by name and ID
+func ignoredSystemIDs() map[int]struct{} {
+	ids := make(map[int]struct{}, 0)
+
+	for _, sys := range config.Get().IgnoreSystemIDs {
+		ids[sys] = struct{}{}
+	}
+
+	if b, err := backend.Backend(); err == nil {
+		if idsFromBackend, err := b.GetIgnoredSystemIDs(context.Background()); err == nil {
+			for _, idStr := range idsFromBackend {
+				if id, err := strconv.ParseInt(idStr, 10, 0); err == nil {
+					ids[int(id)] = struct{}{}
+					continue
+				}
+
+				slog.Warn("failed to parse ignored system id", "id", idStr)
+			}
+		} else {
+			slog.Warn("failed to get ignored system ids from backend", "error", err)
+		}
+	} else {
+		slog.Warn("failed to get backend", "error", err)
+	}
+
+	return ids
+}
+
+func ignoredSystemNames() map[string]struct{} {
+	names := make(map[string]struct{}, 0)
+
+	for _, sys := range config.Get().IgnoreSystemNames {
+		names[sys] = struct{}{}
+	}
+
+	if b, err := backend.Backend(); err == nil {
+		if namesFromBackend, err := b.GetIgnoredSystemNames(context.Background()); err == nil {
+			for _, name := range namesFromBackend {
+				names[name] = struct{}{}
+			}
+		} else {
+			slog.Warn("failed to get ignored system names from backend", "error", err)
+		}
+	} else {
+		slog.Warn("failed to get backend", "error", err)
+	}
+
+	return names
+}
+
+func ignoredRegionIDs() map[int]struct{} {
+	ids := make(map[int]struct{}, 0)
+
+	for _, sys := range config.Get().IgnoreRegionIDs {
+		ids[sys] = struct{}{}
+	}
+
+	if b, err := backend.Backend(); err == nil {
+		if idsFromBackend, err := b.GetIgnoredRegionIDs(context.Background()); err == nil {
+			for _, idStr := range idsFromBackend {
+				if id, err := strconv.ParseInt(idStr, 10, 0); err == nil {
+					ids[int(id)] = struct{}{}
+					continue
+				}
+
+				slog.Warn("failed to parse ignored system id", "id", idStr)
+			}
+		} else {
+			slog.Warn("failed to get ignored region ids from backend", "error", err)
+		}
+	} else {
+		slog.Warn("failed to get backend", "error", err)
+	}
+
+	return ids
 }

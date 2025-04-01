@@ -1,23 +1,29 @@
-admin_name: Hi
-admin_email: hello@admin.com
-app_name: ItsMe
-version: v0.1.0
-refresh_interval: 300
+admin_name: Hi # Used for User-Agent headers
+admin_email: hello@admin.com # Used for User-Agent headers
+app_name: ItsMe # Used for User-Agent headers
+version: v0.1.0 # Used for User-Agent headers
+refresh_interval: 300 # How often to query for killmails
 wanderer:
-  token: 
-  slug: 
-  host: https://wanderer.ltd
-only_wh_kills: true
-ignore_systems:
+  token: "" # Wanderer API token
+  slug: "" # Wanderer map slug
+  host: https://wanderer.ltd # Wanderer host
+only_wh_kills: true # Only show wormhole killmails - doesn't work, Wanderer issue
+ignore_system_names: # Which systems to ignore by name
   - Jita
   - Thera
+  - Anoikis SKIN
+  - Turnur
+ignore_system_ids: [] # Which systems to ignore by ID
+ignore_region_ids: # Which regions to ignore by ID
+  - 10000070
 discord:
-  token: 
-  channel: 
-friends:
+  token: "" # Discord bot token
+  channels: [] # Discord channels to send the messages to 
+friends: # List of friendly entities
   alliances: []
   corporations: []
   characters: []
-redis:
+redict: # Backend configuration
   address: localhost:6379
   database: 0
+  ttl: 86400 # How long a killmail's key is cached in Redis
