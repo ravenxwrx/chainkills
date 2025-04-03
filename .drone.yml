@@ -10,3 +10,14 @@ steps:
       - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.0.2
       - golangci-lint run ./...
       - go test -cover ./...
+  
+  -
+    name: build and release
+    image: docker:dind
+    environment:
+      GHCR_USERNAME:
+        from_secret: GHCR_USERNAME
+      GHCR_PASSWORD:
+        from_secret: GHCR_PASSWORD
+    commands:
+      - docker login --username ${GHCR_USERNAME} --password ${GHCR_PASSWORD} ghcr.io
