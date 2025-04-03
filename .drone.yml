@@ -14,6 +14,9 @@ steps:
   -
     name: build and release
     image: docker:dind
+    volumes:
+      - name: dockersock
+        path: /var/run/
     environment:
       GHCR_USERNAME:
         from_secret: ghcr_username
