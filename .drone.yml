@@ -1,0 +1,11 @@
+kind: pipeline
+type: kubernetes
+name: default
+
+steps:
+  -
+    name: lint and test
+    image: golang:1.23
+    commands:
+      - golangci-lint run ./...
+      - go test -cover ./...
