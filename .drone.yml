@@ -21,3 +21,4 @@ steps:
         from_secret: ghcr_password
     commands:
       - docker login --username $GHCR_USERNAME --password $GHCR_PASSWORD ghcr.io
+      - docker build -t ghcr.io/ravenxwrx/chainkills:$(git rev-parse --short HEAD) .
