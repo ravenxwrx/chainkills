@@ -42,7 +42,7 @@ func TestEvict(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, cache.AddKillmail(ctx, id))
-	cache.items[id] = time.Now().Add(-10 * time.Hour)
+	cache.items[id] = time.Now().Add(-36 * time.Hour)
 	cache.evict()
 
 	exists, err := cache.KillmailExists(ctx, id)
