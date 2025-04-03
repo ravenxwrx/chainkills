@@ -7,5 +7,6 @@ steps:
     name: lint and test
     image: golang:1.23
     commands:
+      - apt-get update && apt-get install -y golangci-lint
       - golangci-lint run ./...
       - go test -cover ./...
