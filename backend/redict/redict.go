@@ -71,11 +71,13 @@ func (r *Backend) KillmailExists(ctx context.Context, id string) (bool, error) {
 
 	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, id)
 	_, err := r.redict.Get(context.Background(), key).Result()
-	if err == nil {
+
+	switch err {
+	case nil:
 		span.SetAttributes(attribute.String("cache", "hit"))
 		slog.Debug("cache hit", "id", id)
 		return true, nil
-	} else if err == redis.Nil {
+	case redis.Nil:
 		span.SetAttributes(attribute.String("cache", "miss"))
 		slog.Debug("cache miss", "id", id)
 		return false, nil

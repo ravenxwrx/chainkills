@@ -122,10 +122,11 @@ func (r *RedictCache) Exists(ctx context.Context, id string) (bool, error) {
 	defer span.End()
 
 	_, err := r.redict.Get(context.Background(), id).Result()
-	if err == nil {
+	switch err {
+	case nil:
 		span.SetAttributes(attribute.String("cache", "hit"))
 		return true, nil
-	} else if err == redis.Nil {
+	case redis.Nil:
 		span.SetAttributes(attribute.String("cache", "miss"))
 		return false, nil
 	}
