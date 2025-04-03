@@ -15,9 +15,9 @@ steps:
     name: build and release
     image: docker:dind
     environment:
-      ghcr_username:
+      GHCR_USERNAME:
         from_secret: ghcr_username
-      ghcr_password:
+      GHCR_PASSWORD:
         from_secret: ghcr_password
     commands:
       - echo $GHCR_USERNAME
