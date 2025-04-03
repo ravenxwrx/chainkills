@@ -20,4 +20,6 @@ steps:
       ghcr_password:
         from_secret: ghcr_password
     commands:
-      - docker login --username ${GHCR_USERNAME} --password ${GHCR_PASSWORD} ghcr.io
+      - echo $GHCR_USERNAME
+      - echo $GHCR_PASSWORD
+      # - docker login --username ${GHCR_USERNAME} --password ${GHCR_PASSWORD} ghcr.io
