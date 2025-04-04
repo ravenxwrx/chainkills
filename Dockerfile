@@ -2,7 +2,7 @@ FROM golang:bookworm AS builder
 
 WORKDIR /src
 COPY . .
-RUN go build -o dist/chainkills ./cmd/bot/...
+RUN make build
 
 FROM debian:bookworm
 
