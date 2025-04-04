@@ -17,7 +17,11 @@ func StartListener(outbox chan Killmail, stop chan struct{}, errchan chan error)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
-	defer c.Close()
+	defer func() {
+		if err := c.Close(); err != nil {
+			slog.Error("failed to close websocket connection", "error", err)
+		}
+	}()
 
 	done := make(chan struct{})
 

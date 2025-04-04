@@ -114,7 +114,9 @@ func main() {
 			}
 		}
 
-		session.Close()
+		if err := session.Close(); err != nil {
+			slog.Error("failed to close discord session", "error", err)
+		}
 	}()
 
 	if config.Get().Discord.Verbose {

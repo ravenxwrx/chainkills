@@ -211,10 +211,18 @@ func GetEsiKillmail(ctx context.Context, id uint64, hash string) (Killmail, erro
 		logger.Error("failed to decode killmail", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			logger.Error("failed to close response body", "error", err)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
 		return Killmail{}, err
 	}
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		logger.Error("failed to close response body", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
 
 	return km, nil
 }
@@ -250,10 +258,18 @@ func fetchSystemKillmailsPage(logger *slog.Logger, span trace.Span, systemID str
 		logger.Error("failed to decode killmails", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			logger.Error("failed to close response body", "error", err)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
 		return nil, err
 	}
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		logger.Error("failed to close response body", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
 
 	return killmails, nil
 }

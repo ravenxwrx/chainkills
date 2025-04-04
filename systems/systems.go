@@ -131,10 +131,18 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 		logger.Error("failed to decode systems", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			logger.Error("failed to close response body", "error", err)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
 		return false, err
 	}
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		logger.Error("failed to close response body", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
 
 	tmpRegistry := make([]System, 0)
 
