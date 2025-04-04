@@ -4,6 +4,12 @@ name: default
 
 steps:
   -
+    name: fetch
+    image: alpine/git
+    commands:
+      - git fetch --tags
+
+  -
     name: lint and test
     image: golang:1.23
     commands:
