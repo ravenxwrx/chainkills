@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"git.sr.ht/~barveyhirdman/chainkills/backend/memory"
+	"git.sr.ht/~barveyhirdman/chainkills/backend/model"
 	"git.sr.ht/~barveyhirdman/chainkills/backend/redict"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 )
@@ -21,6 +22,8 @@ type Engine interface {
 	IgnoreSystemID(ctx context.Context, id int64) error
 	IgnoreSystemName(ctx context.Context, name string) error
 	IgnoreRegionID(ctx context.Context, id int64) error
+	RegisterChannel(ctx context.Context, guildID string, channelID string) error
+	GetRegisteredChannels(ctx context.Context) ([]model.Channel, error)
 }
 
 func Backend() (Engine, error) {

@@ -7,9 +7,13 @@ import (
 
 var (
 	hash      string
-	tag       string
+	tag       string = "v0.1.0"
 	buildTime string
 )
+
+func Version() string {
+	return tag
+}
 
 func Print() {
 	fmt.Printf("Version:     %s\n", tag)

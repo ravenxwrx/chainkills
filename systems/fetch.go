@@ -14,6 +14,7 @@ import (
 	"git.sr.ht/~barveyhirdman/chainkills/backend"
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
+	"git.sr.ht/~barveyhirdman/chainkills/version"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -244,7 +245,7 @@ func fetchSystemKillmailsPage(logger *slog.Logger, span trace.Span, systemID str
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
-	req.Header.Set("User-Agent", fmt.Sprintf("%s/%s:%s %s", config.Get().AdminName, config.Get().AppName, config.Get().Version, config.Get().AdminEmail))
+	req.Header.Set("User-Agent", fmt.Sprintf("%s/%s:%s %s", config.Get().AdminName, config.Get().AppName, version.Version(), config.Get().AdminEmail))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

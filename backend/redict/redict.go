@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
+	"git.sr.ht/~barveyhirdman/chainkills/backend/model"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
@@ -21,13 +23,16 @@ const (
 	spanGetIgnoredSystemIDs   = "GetIgnoredSystemIDs"
 	spanGetIgnoredSystemNames = "GetIgnoredSystemNames"
 	spanGetIgnoredRegionIDs   = "GetIgnoredRegionIDs"
+	spanGetRegisteredChannels = "GetRegisteredChannels"
 	spanIgnoreSystemID        = "IgnoreSystemID"
 	spanIgnoreSystemName      = "IgnoreSystemName"
 	spanIgnoreRegionID        = "IgnoreRegionID"
+	spanRegisterChannel       = "RegisterChannel"
 
 	keyIgnoredSystemIDs   = "ignored_system_ids"
 	keyIgnoredSystemNames = "ignored_system_names"
 	keyIgnoredRegionIDs   = "ignored_region_ids"
+	keyRegisteredChannels = "registered_channels"
 )
 
 type Backend struct {
@@ -119,6 +124,7 @@ func (r *Backend) GetIgnoredSystemNames(ctx context.Context) ([]string, error) {
 	span.SetStatus(codes.Ok, "ok")
 	return ids, nil
 }
+
 func (r *Backend) GetIgnoredRegionIDs(ctx context.Context) ([]string, error) {
 	_, span := otel.Tracer(packageName).Start(ctx, spanGetIgnoredRegionIDs)
 	defer span.End()
@@ -133,6 +139,36 @@ func (r *Backend) GetIgnoredRegionIDs(ctx context.Context) ([]string, error) {
 
 	span.SetStatus(codes.Ok, "ok")
 	return ids, nil
+}
+
+func (r *Backend) GetRegisteredChannels(ctx context.Context) ([]model.Channel, error) {
+	_, span := otel.Tracer(packageName).Start(ctx, spanGetRegisteredChannels)
+	defer span.End()
+
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyRegisteredChannels)
+	ids, err := r.redict.SMembers(context.Background(), key).Result()
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	span.SetStatus(codes.Ok, "ok")
+
+	channels := make([]model.Channel, 0, len(ids))
+	for _, id := range ids {
+		d := strings.Split(id, ":")
+		if len(d) != 2 {
+			continue
+		}
+
+		channels = append(channels, model.Channel{
+			GuildID:   d[0],
+			ChannelID: d[1],
+		})
+	}
+
+	return channels, nil
 }
 
 func (r *Backend) IgnoreSystemID(ctx context.Context, id int64) error {
@@ -176,6 +212,25 @@ func (r *Backend) IgnoreRegionID(ctx context.Context, id int64) error {
 	span.SetAttributes(attribute.Int64("id", id))
 
 	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyIgnoredRegionIDs)
+	if _, err := r.redict.SAdd(sctx, key, id).Result(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	span.SetStatus(codes.Ok, "ok")
+	return nil
+}
+
+func (r *Backend) RegisterChannel(ctx context.Context, guildID string, channelID string) error {
+	sctx, span := otel.Tracer(packageName).Start(ctx, spanRegisterChannel)
+	defer span.End()
+
+	id := fmt.Sprintf("%s:%s", guildID, channelID)
+
+	span.SetAttributes(attribute.String("id", id))
+
+	key := fmt.Sprintf("%s:%s", config.Get().Redict.Prefix, keyRegisteredChannels)
 	if _, err := r.redict.SAdd(sctx, key, id).Result(); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
