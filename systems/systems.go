@@ -15,6 +15,7 @@ import (
 	"git.sr.ht/~barveyhirdman/chainkills/backend"
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
+	"git.sr.ht/~barveyhirdman/chainkills/version"
 	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -114,7 +115,7 @@ func (s *SystemRegister) Update(ctx context.Context) (bool, error) {
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", config.Get().Wanderer.Token))
 	req.Header.Add("Accept", "application/json")
-	req.Header.Add("User-Agent", fmt.Sprintf("%s/%s:%s", config.Get().AdminName, config.Get().AppName, config.Get().Version))
+	req.Header.Add("User-Agent", fmt.Sprintf("%s/%s:%s", config.Get().AdminName, config.Get().AppName, version.Version()))
 
 	resp, err := client.Do(req)
 	if err != nil {

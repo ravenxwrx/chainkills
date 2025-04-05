@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"git.sr.ht/~barveyhirdman/chainkills/backend"
 	"git.sr.ht/~barveyhirdman/chainkills/common"
 	"git.sr.ht/~barveyhirdman/chainkills/config"
 	"git.sr.ht/~barveyhirdman/chainkills/discord"
@@ -50,7 +51,7 @@ func main() {
 	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})
-	l := slog.New(h).With("version", config.Get().Version)
+	l := slog.New(h).With("version", version.Version())
 	slog.SetDefault(l)
 
 	shutdownFns, err := instrumentation.Init(rootCtx)
@@ -63,6 +64,12 @@ func main() {
 			slog.Error("failed to shut down tracer cleanly", "error", err)
 		}
 	}()
+
+	backend, err := backend.Backend()
+	if err != nil {
+		slog.Error("failed to initialize backend", "error", err)
+		os.Exit(1)
+	}
 
 	discord.Init()
 	session, err := discordgo.New("Bot " + config.Get().Discord.Token)
@@ -78,12 +85,13 @@ func main() {
 
 	registeredHandlers["HandleGuildCreate"] = session.AddHandler(discord.HandleGuildCreate)
 	registeredHandlers["HandleGuildDelete"] = session.AddHandler(discord.HandleGuildDelete)
-	registeredHandlers["HandleSlasCommand"] = session.AddHandler(discord.HandleSlashCommand)
+	registeredHandlers["HandleSlashCommand"] = session.AddHandler(discord.HandleSlashCommand)
 
 	commands := []*discordgo.ApplicationCommand{
 		discord.IgnoreSystemIDCommand,
 		discord.IgnoreSystemNameCommand,
 		discord.IgnoreRegionIDCommand,
+		discord.RegisterChannelCommand,
 	}
 	cmdWg := &sync.WaitGroup{}
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.Ready) {
@@ -190,10 +198,15 @@ func main() {
 				continue
 			}
 
-			channels := config.Get().Discord.Channels
+			channels, err := backend.GetRegisteredChannels(rootCtx)
+			if err != nil {
+				slog.Error("failed to get registered channels", "error", err)
+				continue
+			}
 
 			validChannels := make([]string, 0)
-			for _, c := range channels {
+			for _, channel := range channels {
+				c := channel.ChannelID
 				if _, err := session.State.Channel(c); err == nil {
 					validChannels = append(validChannels, c)
 				} else {

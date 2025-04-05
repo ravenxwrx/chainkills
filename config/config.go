@@ -18,7 +18,6 @@ type Cfg struct {
 	AdminName         string   `yaml:"admin_name"`
 	AdminEmail        string   `yaml:"admin_email"`
 	AppName           string   `yaml:"app_name"`
-	Version           string   `yaml:"version"`
 	FetchTimeFrame    int      `yaml:"fetch_timeframe"`
 	IgnoreSystemNames []string `yaml:"ignore_system_names"`
 	IgnoreSystemIDs   []int    `yaml:"ignore_system_ids"`
